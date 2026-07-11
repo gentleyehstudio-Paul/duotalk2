@@ -641,7 +641,15 @@ async function compose() {
   const myURL = URL.createObjectURL(myBlob);
   const myVid = await loadVideo(myURL);
 
-  const W = 720, H = 640;
+  // Use actual video dimensions to avoid distortion
+  const vidW = myVid.videoWidth  || 720;
+  const vidH = myVid.videoHeight || 1280;
+  // Each cell: half width, maintain aspect ratio
+  const cellW = 360;
+  const cellH = Math.round(cellW * vidH / vidW);
+  const W = cellW * 2;
+  const H = cellH;
+
   const canvas = document.getElementById('result-canvas');
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
@@ -653,13 +661,29 @@ async function compose() {
     partnerVid = await loadVideo(partnerURL);
   }
 
-  const outMime = bestMime();
+  // ── Audio: pipe my recording's audio into output stream ──
+  const audioCtx = new AudioContext();
   const outStream = canvas.captureStream(30);
-  const rec = new MediaRecorder(outStream, { mimeType: outMime, videoBitsPerSecond: 2500000 });
+
+  try {
+    // Create audio source from my recorded video
+    const audioSrc = audioCtx.createMediaElementSource(myVid);
+    const audioDest = audioCtx.createMediaStreamDestination();
+    audioSrc.connect(audioDest);
+    audioSrc.connect(audioCtx.destination); // also play locally during compose
+    // Add audio track to output stream
+    audioDest.stream.getAudioTracks().forEach(t => outStream.addTrack(t));
+  } catch(e) {
+    console.warn('Audio routing failed, composing without audio:', e);
+  }
+
+  const outMime = bestMime();
+  const rec = new MediaRecorder(outStream, { mimeType: outMime, videoBitsPerSecond: 3000000 });
   const outChunks = [];
   rec.ondataavailable = e => outChunks.push(e.data);
 
   rec.onstop = () => {
+    audioCtx.close();
     const blob = new Blob(outChunks, { type: outMime });
     S.resultBlob = blob;
     document.getElementById('res-size').textContent = (blob.size/1024/1024).toFixed(1) + ' MB';
@@ -674,29 +698,44 @@ async function compose() {
   myVid.currentTime = 0;
   if (partnerVid) partnerVid.currentTime = 0;
 
+  // Helper: draw video centered & cropped (cover) into a rect, maintaining AR
+  function drawCover(vid, x, y, w, h) {
+    const vr = vid.videoWidth / vid.videoHeight;
+    const cr = w / h;
+    let sx, sy, sw, sh;
+    if (vr > cr) { // video wider than cell → crop sides
+      sh = vid.videoHeight; sw = sh * cr;
+      sy = 0; sx = (vid.videoWidth - sw) / 2;
+    } else { // video taller → crop top/bottom
+      sw = vid.videoWidth; sh = sw / cr;
+      sx = 0; sy = (vid.videoHeight - sh) / 2;
+    }
+    ctx.drawImage(vid, sx, sy, sw, sh, x, y, w, h);
+  }
+
   await new Promise(resolve => {
     function draw() {
       if (myVid.ended) { rec.stop(); resolve(); return; }
       ctx.fillStyle = '#080808';
       ctx.fillRect(0, 0, W, H);
 
-      // Left: my feed (mirrored — as seen from other person)
+      // Left: my feed (mirrored)
       ctx.save();
-      ctx.beginPath(); ctx.rect(0, 0, W/2, H); ctx.clip();
-      ctx.translate(W/2, 0); ctx.scale(-1, 1);
-      ctx.drawImage(myVid, 0, 0, W/2, H);
+      ctx.beginPath(); ctx.rect(0, 0, cellW, H); ctx.clip();
+      ctx.translate(cellW, 0); ctx.scale(-1, 1);
+      drawCover(myVid, 0, 0, cellW, H);
       ctx.restore();
 
       // Right: partner feed
       if (partnerVid && !partnerVid.ended) {
-        ctx.drawImage(partnerVid, W/2, 0, W/2, H);
+        drawCover(partnerVid, cellW, 0, cellW, H);
       } else {
         ctx.fillStyle = '#0d0d0d';
-        ctx.fillRect(W/2, 0, W/2, H);
+        ctx.fillRect(cellW, 0, cellW, H);
         ctx.fillStyle = '#333';
         ctx.font = '13px "DM Mono"';
         ctx.textAlign = 'center';
-        ctx.fillText('PARTNER', 3*W/4, H/2);
+        ctx.fillText('PARTNER', cellW + cellW/2, H/2);
       }
 
       // Gold divider
@@ -705,13 +744,13 @@ async function compose() {
 
       // Labels
       ctx.fillStyle = 'rgba(8,8,8,.75)';
-      ctx.fillRect(0, H-40, W/2, 40);
-      ctx.fillRect(W/2, H-40, W/2, 40);
+      ctx.fillRect(0, H-40, cellW, 40);
+      ctx.fillRect(cellW, H-40, cellW, 40);
       ctx.fillStyle = '#c9a84c';
       ctx.font = '500 12px "Noto Sans TC"';
       ctx.textAlign = 'center';
-      ctx.fillText('說話者 A', W/4, H-16);
-      ctx.fillText('說話者 B', 3*W/4, H-16);
+      ctx.fillText('說話者 A', cellW/2, H-16);
+      ctx.fillText('說話者 B', cellW + cellW/2, H-16);
 
       requestAnimationFrame(draw);
     }
