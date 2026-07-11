@@ -1,0 +1,788 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#080808">
+<title>DuoTalk — 雙機對話錄影</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=DM+Mono:wght@300;400&family=Noto+Sans+TC:wght@300;400;500&display=swap');
+
+:root {
+  --black:  #080808;
+  --void:   #0d0d0d;
+  --panel:  #131313;
+  --border: #242424;
+  --gold:   #c9a84c;
+  --gold-l: #e8c96a;
+  --gold-d: #7a5e1e;
+  --mist:   #888;
+  --white:  #f0ede6;
+  --danger: #c0392b;
+  --ok:     #27ae60;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--black);
+  color: var(--white);
+  font-family: 'Noto Sans TC', sans-serif;
+  font-weight: 300;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Header ── */
+header {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 24px;
+  background: linear-gradient(to bottom, var(--black) 60%, transparent);
+}
+.logo {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 600; letter-spacing: .12em;
+  color: var(--gold);
+}
+.logo span { font-weight: 300; color: var(--mist); font-size: 16px; }
+.badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px; letter-spacing: .2em; text-transform: uppercase;
+  padding: 4px 10px; border: 1px solid var(--gold-d);
+  color: var(--gold); border-radius: 2px;
+  display: none;
+}
+
+/* ── Screens ── */
+.screen {
+  display: none; min-height: 100dvh;
+  padding: 80px 24px 40px;
+  flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 24px;
+}
+.screen.active { display: flex; }
+
+/* ── Typography ── */
+.hero {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: clamp(38px, 10vw, 68px);
+  font-weight: 300; line-height: 1.08;
+  text-align: center;
+}
+.hero em {
+  font-style: normal;
+  background: linear-gradient(135deg, var(--gold-l), var(--gold-d));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.sub {
+  font-size: 13px; color: var(--mist); letter-spacing: .05em;
+  text-align: center; line-height: 1.75; max-width: 290px;
+}
+.mono {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px; letter-spacing: .2em; text-transform: uppercase;
+  color: var(--gold);
+}
+.note {
+  font-size: 11px; color: var(--gold-d); text-align: center;
+  letter-spacing: .04em; line-height: 1.75; max-width: 300px;
+}
+
+/* ── Divider ── */
+.div {
+  width: 48px; height: 1px;
+  background: linear-gradient(to right, transparent, var(--gold), transparent);
+}
+
+/* ── Buttons ── */
+.btn {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; max-width: 320px; padding: 17px 24px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px; letter-spacing: .2em; text-transform: uppercase;
+  border: none; cursor: pointer; border-radius: 2px;
+  transition: all .18s; -webkit-appearance: none;
+}
+.btn-gold { background: linear-gradient(135deg, var(--gold), var(--gold-d)); color: var(--black); }
+.btn-gold:active { filter: brightness(1.2); }
+.btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--mist); }
+.btn-ghost:active { border-color: var(--gold-d); color: var(--white); }
+.btn-red { background: var(--danger); color: #fff; }
+.btn:disabled { opacity: .3; pointer-events: none; }
+
+/* ── Card ── */
+.card {
+  width: 100%; max-width: 360px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 4px; padding: 24px;
+}
+
+/* ── Room code ── */
+.room-code {
+  font-family: 'DM Mono', monospace;
+  font-size: 52px; letter-spacing: .35em;
+  color: var(--gold-l); text-align: center;
+  padding: 16px 0 8px;
+}
+.room-code-hint {
+  font-size: 11px; color: var(--mist); text-align: center; letter-spacing: .08em;
+}
+
+/* ── Input ── */
+.code-input {
+  width: 100%; background: var(--void);
+  border: 1px solid var(--border); border-radius: 2px;
+  color: var(--white);
+  font-family: 'DM Mono', monospace;
+  font-size: 38px; letter-spacing: .35em; text-align: center;
+  padding: 16px; text-transform: uppercase; outline: none;
+  transition: border-color .2s; margin-bottom: 14px;
+  -webkit-appearance: none;
+}
+.code-input:focus { border-color: var(--gold); }
+.code-input::placeholder { color: #333; }
+
+/* ── Status ── */
+.status-row {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; color: var(--mist);
+}
+.dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border); flex-shrink: 0;
+}
+.dot.wait  { background: var(--gold-d); animation: pulse 1.4s infinite; }
+.dot.conn  { background: var(--ok); }
+.dot.rec   { background: var(--danger); animation: pulse .8s infinite; }
+
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+/* ── Waiting dots ── */
+.wavy { display: flex; gap: 5px; justify-content: center; }
+.wavy span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gold); animation: bounce .9s infinite;
+}
+.wavy span:nth-child(2){animation-delay:.15s}
+.wavy span:nth-child(3){animation-delay:.3s}
+@keyframes bounce { 0%,100%{transform:translateY(0);opacity:.25} 50%{transform:translateY(-7px);opacity:1} }
+
+/* ── Countdown ── */
+.ring {
+  width: 130px; height: 130px; border-radius: 50%;
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
+.ring-num {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 72px; font-weight: 600; color: var(--gold);
+}
+
+/* ── Video ── */
+video {
+  width: 100%; max-width: 360px;
+  aspect-ratio: 9/16; object-fit: cover;
+  border-radius: 4px; background: #000;
+  border: 1px solid var(--border);
+  display: block;
+}
+.mirror { transform: scaleX(-1); }
+
+/* ── Timer ── */
+.timer {
+  font-family: 'DM Mono', monospace;
+  font-size: 42px; letter-spacing: .1em; color: var(--danger);
+}
+
+/* ── Info grid ── */
+.grid2 {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px; width: 100%; max-width: 360px;
+}
+.gcell {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 2px; padding: 14px; text-align: center;
+}
+.gcell .v { font-family: 'DM Mono', monospace; font-size: 22px; color: var(--gold); }
+.gcell .l { font-size: 10px; color: var(--mist); letter-spacing: .1em; margin-top: 3px; }
+
+/* ── Steps ── */
+.steps { width: 100%; max-width: 310px; display: flex; flex-direction: column; gap: 18px; }
+.step  { display: flex; gap: 14px; align-items: flex-start; }
+.step-n { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--gold-d); min-width: 22px; padding-top: 2px; }
+.step-t { font-size: 13px; color: var(--mist); line-height: 1.65; }
+.step-t strong { color: var(--white); font-weight: 400; }
+
+/* ── Progress ── */
+.prog-wrap { width: 100%; max-width: 360px; height: 1px; background: var(--border); }
+.prog-bar  { height: 100%; background: var(--gold); width: 0%; transition: width .3s; }
+
+/* ── Result canvas ── */
+#result-canvas {
+  width: 100%; max-width: 360px; display: block;
+  border-radius: 4px; border: 1px solid var(--border); background: var(--void);
+}
+
+/* ── Error toast ── */
+#toast {
+  position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+  background: #1a0a0a; border: 1px solid var(--danger);
+  color: #e88; border-radius: 4px; padding: 12px 20px;
+  font-size: 12px; letter-spacing: .04em; text-align: center;
+  opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 999;
+  max-width: 320px;
+}
+#toast.show { opacity: 1; }
+
+/* ── Connection indicator ── */
+#conn-bar {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(to right, var(--gold-d), var(--gold), var(--gold-d));
+  transform: scaleX(0); transform-origin: left;
+  transition: transform .4s; z-index: 200;
+}
+#conn-bar.active { transform: scaleX(1); }
+</style>
+</head>
+<body>
+
+<div id="conn-bar"></div>
+
+<header>
+  <div class="logo">DuoTalk <span>/ 雙機</span></div>
+  <div class="badge" id="badge">—</div>
+</header>
+
+<!-- HOME -->
+<div class="screen active" id="s-home">
+  <div class="hero">兩個人<br><em>一段對話</em><br>一支影片</div>
+  <div class="div"></div>
+  <div class="sub">兩台手機各拍對方<br>同步錄影，自動合成並排影片</div>
+  <div class="steps">
+    <div class="step"><div class="step-n">01</div><div class="step-t"><strong>主機建立房間</strong>，取得 4 碼號</div></div>
+    <div class="step"><div class="step-n">02</div><div class="step-t"><strong>客機輸入房間號</strong>，兩機配對</div></div>
+    <div class="step"><div class="step-n">03</div><div class="step-t"><strong>同步倒數 3 秒</strong>，同時開錄</div></div>
+    <div class="step"><div class="step-n">04</div><div class="step-t"><strong>停止後自動合成</strong>，下載影片</div></div>
+  </div>
+  <button class="btn btn-gold" onclick="createRoom()">建立房間（主機）</button>
+  <button class="btn btn-ghost" onclick="show('s-join')">加入房間（客機）</button>
+</div>
+
+<!-- JOIN -->
+<div class="screen" id="s-join">
+  <div class="mono" style="margin-bottom:-8px">客機 · Guest</div>
+  <div class="card">
+    <div class="mono" style="margin-bottom:12px">輸入 4 碼房間號</div>
+    <input class="code-input" id="join-input" maxlength="4" placeholder="····" autocomplete="off" spellcheck="false" inputmode="text">
+    <button class="btn btn-gold" id="join-btn" onclick="joinRoom()" disabled>加入房間</button>
+  </div>
+  <div class="status-row" id="join-status" style="display:none">
+    <div class="dot wait"></div><span>連線中…</span>
+  </div>
+  <button class="btn btn-ghost" onclick="goHome()">← 返回</button>
+</div>
+
+<!-- WAIT (host) -->
+<div class="screen" id="s-wait">
+  <div class="mono" style="margin-bottom:-8px">主機 · Host</div>
+  <div class="card">
+    <div class="mono" style="margin-bottom:4px">你的房間號</div>
+    <div class="room-code" id="disp-code">—</div>
+    <div class="room-code-hint">將此號碼告知對方</div>
+  </div>
+  <div class="status-row">
+    <div class="dot wait" id="partner-dot"></div>
+    <span id="partner-txt">等待對方加入…</span>
+  </div>
+  <div class="wavy" id="wait-wavy"><span></span><span></span><span></span></div>
+  <button class="btn btn-ghost" onclick="goHome()">← 返回</button>
+</div>
+
+<!-- READY -->
+<div class="screen" id="s-ready">
+  <video id="preview-vid" autoplay muted playsinline class="mirror"></video>
+  <div class="grid2">
+    <div class="gcell"><div class="v" id="r-code">—</div><div class="l">房間號</div></div>
+    <div class="gcell"><div class="v" id="r-role">—</div><div class="l">角色</div></div>
+  </div>
+  <div class="status-row"><div class="dot conn"></div><span>雙機已連線</span></div>
+  <button class="btn btn-gold" id="start-btn" onclick="doStartCountdown()">開始錄影</button>
+  <div class="note" id="ready-note"></div>
+</div>
+
+<!-- COUNTDOWN -->
+<div class="screen" id="s-countdown">
+  <div class="sub" style="letter-spacing:.08em">錄影即將開始</div>
+  <div class="ring"><div class="ring-num" id="cd-num">3</div></div>
+  <div class="sub">請將鏡頭對準對方</div>
+</div>
+
+<!-- RECORDING -->
+<div class="screen" id="s-recording">
+  <video id="rec-vid" autoplay muted playsinline class="mirror"></video>
+  <div class="timer" id="rec-timer">00:00</div>
+  <div class="status-row"><div class="dot rec"></div><span>錄影中</span></div>
+  <button class="btn btn-red" onclick="doStop()">停止錄影</button>
+</div>
+
+<!-- PROCESSING -->
+<div class="screen" id="s-processing">
+  <div class="hero" style="font-size:32px">合成中…</div>
+  <div class="prog-wrap"><div class="prog-bar" id="proc-bar"></div></div>
+  <div class="sub" id="proc-label">正在合成對話影片</div>
+</div>
+
+<!-- RESULT -->
+<div class="screen" id="s-result">
+  <div class="mono">完成</div>
+  <canvas id="result-canvas"></canvas>
+  <div class="grid2">
+    <div class="gcell"><div class="v" id="res-dur">—</div><div class="l">時長</div></div>
+    <div class="gcell"><div class="v" id="res-size">—</div><div class="l">檔案大小</div></div>
+  </div>
+  <button class="btn btn-gold" onclick="downloadVideo()">下載影片</button>
+  <button class="btn btn-ghost" onclick="goHome()">重新開始</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════
+// CONFIG — auto-detect server URL
+// ══════════════════════════════════════════
+const WS_URL = (() => {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${proto}//${location.host}`;
+})();
+
+// ══════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════
+const S = {
+  ws: null,
+  role: null,         // 'host' | 'guest'
+  code: null,
+  stream: null,
+  recorder: null,
+  chunks: [],
+  startTime: null,
+  timerIv: null,
+  progIv: null,
+  resultBlob: null,
+  partnerBlob: null,
+  partnerReady: false,
+  myDone: false,
+};
+
+// ══════════════════════════════════════════
+// WEBSOCKET
+// ══════════════════════════════════════════
+function connectWS(onOpen) {
+  const ws = new WebSocket(WS_URL);
+  ws.binaryType = 'arraybuffer';
+  S.ws = ws;
+
+  ws.onopen = () => {
+    document.getElementById('conn-bar').classList.add('active');
+    onOpen();
+  };
+
+  ws.onmessage = (ev) => {
+    if (ev.data instanceof ArrayBuffer) {
+      // Binary: partner video chunk
+      S.partnerChunks = S.partnerChunks || [];
+      S.partnerChunks.push(ev.data);
+      return;
+    }
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    handleMsg(msg);
+  };
+
+  ws.onclose = () => {
+    document.getElementById('conn-bar').classList.remove('active');
+    if (!['s-home','s-join'].includes(currentScreen())) {
+      toast('連線中斷，請重新開始');
+    }
+  };
+
+  ws.onerror = () => toast('無法連線至伺服器');
+}
+
+function send(type, payload = {}) {
+  if (S.ws && S.ws.readyState === WebSocket.OPEN)
+    S.ws.send(JSON.stringify({ type, payload }));
+}
+
+function sendBinary(buffer) {
+  if (S.ws && S.ws.readyState === WebSocket.OPEN) S.ws.send(buffer);
+}
+
+function handleMsg({ type, payload = {} }) {
+  if (type === 'ROOM_CREATED') { S.code = payload.code; onRoomCreated(); }
+  if (type === 'JOIN_OK')       { S.code = payload.code; onJoinOk(); }
+  if (type === 'GUEST_JOINED')  onGuestJoined();
+  if (type === 'HOST_ACK')      onHostAck();
+  if (type === 'START_COUNTDOWN') runCountdown();
+  if (type === 'STOP_RECORDING')  doStopLocal();
+  if (type === 'PARTNER_LEFT')  toast('對方已離開房間');
+  if (type === 'RELAY')         handleRelay(payload);
+  if (type === 'ERROR')         toast(payload.msg || '發生錯誤');
+}
+
+function handleRelay(payload) {
+  if (payload.event === 'PARTNER_DONE') {
+    S.partnerMime = payload.mime;
+    S.partnerDone = true;
+    tryCompose();
+  }
+}
+
+// ══════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function currentScreen() {
+  return document.querySelector('.screen.active')?.id;
+}
+function goHome() {
+  cleanup();
+  show('s-home');
+  document.getElementById('badge').style.display = 'none';
+}
+function setBadge(text) {
+  const b = document.getElementById('badge');
+  b.textContent = text; b.style.display = 'block';
+}
+
+// ══════════════════════════════════════════
+// HOST: CREATE ROOM
+// ══════════════════════════════════════════
+function createRoom() {
+  S.role = 'host';
+  setBadge('HOST');
+  connectWS(() => send('CREATE_ROOM'));
+  show('s-wait');
+}
+
+function onRoomCreated() {
+  document.getElementById('disp-code').textContent = S.code;
+}
+
+function onGuestJoined() {
+  document.getElementById('partner-dot').className = 'dot conn';
+  document.getElementById('partner-txt').textContent = '對方已加入！';
+  document.getElementById('wait-wavy').style.display = 'none';
+  send('HOST_ACK');
+  setTimeout(goToReady, 700);
+}
+
+// ══════════════════════════════════════════
+// GUEST: JOIN ROOM
+// ══════════════════════════════════════════
+const joinInput = document.getElementById('join-input');
+joinInput.addEventListener('input', () => {
+  document.getElementById('join-btn').disabled = joinInput.value.replace(/\s/g,'').length < 4;
+});
+
+function joinRoom() {
+  const code = joinInput.value.replace(/\s/g,'').toUpperCase();
+  S.role = 'guest';
+  setBadge('GUEST');
+  document.getElementById('join-status').style.display = 'flex';
+  document.getElementById('join-btn').disabled = true;
+  connectWS(() => send('JOIN_ROOM', { code }));
+}
+
+function onJoinOk() {
+  goToReady();
+}
+function onHostAck() {
+  // already in goToReady from JOIN_OK
+}
+
+// ══════════════════════════════════════════
+// READY
+// ══════════════════════════════════════════
+async function goToReady() {
+  document.getElementById('r-code').textContent = S.code;
+  document.getElementById('r-role').textContent = S.role === 'host' ? '主機' : '客機';
+
+  if (S.role === 'host') {
+    document.getElementById('start-btn').style.display = 'flex';
+    document.getElementById('ready-note').textContent = '由你按下「開始錄影」，兩機同步倒數';
+  } else {
+    document.getElementById('start-btn').style.display = 'none';
+    document.getElementById('ready-note').textContent = '等待主機按下開始…';
+  }
+
+  try {
+    S.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 1280 } },
+      audio: true
+    });
+    document.getElementById('preview-vid').srcObject = S.stream;
+  } catch (e) {
+    toast('無法存取鏡頭：' + e.message); return;
+  }
+  show('s-ready');
+}
+
+// ══════════════════════════════════════════
+// COUNTDOWN
+// ══════════════════════════════════════════
+function doStartCountdown() {
+  send('START_COUNTDOWN');
+  runCountdown();
+}
+
+function runCountdown() {
+  show('s-countdown');
+  let n = 3;
+  document.getElementById('cd-num').textContent = n;
+  const iv = setInterval(() => {
+    n--;
+    if (n <= 0) { clearInterval(iv); beginRecording(); }
+    else document.getElementById('cd-num').textContent = n;
+  }, 1000);
+}
+
+// ══════════════════════════════════════════
+// RECORDING
+// ══════════════════════════════════════════
+function beginRecording() {
+  if (!S.stream) return;
+  document.getElementById('rec-vid').srcObject = S.stream;
+  show('s-recording');
+
+  S.chunks = [];
+  S.partnerChunks = [];
+  S.partnerDone = false;
+  S.myDone = false;
+  S.startTime = Date.now();
+
+  const mime = bestMime();
+  S.recorder = new MediaRecorder(S.stream, { mimeType: mime, videoBitsPerSecond: 2000000 });
+
+  S.recorder.ondataavailable = (e) => {
+    if (e.data.size > 0) {
+      S.chunks.push(e.data);
+      // Send binary chunk to partner
+      e.data.arrayBuffer().then(buf => sendBinary(buf));
+    }
+  };
+
+  S.recorder.start(1000); // 1s chunks → low-latency relay
+  startTimer();
+}
+
+function bestMime() {
+  const types = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+  return types.find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
+
+function startTimer() {
+  S.timerIv = setInterval(() => {
+    const e = Math.floor((Date.now() - S.startTime) / 1000);
+    document.getElementById('rec-timer').textContent =
+      String(Math.floor(e/60)).padStart(2,'0') + ':' + String(e%60).padStart(2,'0');
+  }, 500);
+}
+
+function doStop() {
+  send('STOP_RECORDING');
+  doStopLocal();
+}
+
+function doStopLocal() {
+  clearInterval(S.timerIv);
+  if (S.recorder && S.recorder.state !== 'inactive') {
+    S.recorder.onstop = onMyRecordingDone;
+    S.recorder.stop();
+  }
+  if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+}
+
+function onMyRecordingDone() {
+  S.myBlob = new Blob(S.chunks, { type: S.chunks[0]?.type || 'video/webm' });
+  S.myDone = true;
+  const dur = Math.floor((Date.now() - S.startTime) / 1000);
+  document.getElementById('res-dur').textContent =
+    String(Math.floor(dur/60)).padStart(2,'0') + ':' + String(dur%60).padStart(2,'0');
+  // Notify partner we're done
+  send('RELAY', { event: 'PARTNER_DONE', mime: S.myBlob.type });
+  show('s-processing');
+  animateProgress();
+  tryCompose();
+}
+
+// ══════════════════════════════════════════
+// COMPOSE
+// ══════════════════════════════════════════
+function tryCompose() {
+  if (!S.myDone || !S.partnerDone) return; // wait for both
+  compose();
+}
+
+async function compose() {
+  const myBlob = S.myBlob;
+  const partnerMime = S.partnerMime || 'video/webm';
+  const partnerBlob = S.partnerChunks && S.partnerChunks.length
+    ? new Blob(S.partnerChunks.map(b => b instanceof ArrayBuffer ? b : b), { type: partnerMime })
+    : null;
+
+  const myURL = URL.createObjectURL(myBlob);
+  const myVid = await loadVideo(myURL);
+
+  const W = 720, H = 640;
+  const canvas = document.getElementById('result-canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  let partnerVid = null;
+  let partnerURL = null;
+  if (partnerBlob && partnerBlob.size > 100) {
+    partnerURL = URL.createObjectURL(partnerBlob);
+    partnerVid = await loadVideo(partnerURL);
+  }
+
+  const outMime = bestMime();
+  const outStream = canvas.captureStream(30);
+  const rec = new MediaRecorder(outStream, { mimeType: outMime, videoBitsPerSecond: 2500000 });
+  const outChunks = [];
+  rec.ondataavailable = e => outChunks.push(e.data);
+
+  rec.onstop = () => {
+    const blob = new Blob(outChunks, { type: outMime });
+    S.resultBlob = blob;
+    document.getElementById('res-size').textContent = (blob.size/1024/1024).toFixed(1) + ' MB';
+    clearInterval(S.progIv);
+    document.getElementById('proc-bar').style.width = '100%';
+    URL.revokeObjectURL(myURL);
+    if (partnerURL) URL.revokeObjectURL(partnerURL);
+    setTimeout(() => show('s-result'), 400);
+  };
+
+  rec.start();
+  myVid.currentTime = 0;
+  if (partnerVid) partnerVid.currentTime = 0;
+
+  await new Promise(resolve => {
+    function draw() {
+      if (myVid.ended) { rec.stop(); resolve(); return; }
+      ctx.fillStyle = '#080808';
+      ctx.fillRect(0, 0, W, H);
+
+      // Left: my feed (mirrored — as seen from other person)
+      ctx.save();
+      ctx.beginPath(); ctx.rect(0, 0, W/2, H); ctx.clip();
+      ctx.translate(W/2, 0); ctx.scale(-1, 1);
+      ctx.drawImage(myVid, 0, 0, W/2, H);
+      ctx.restore();
+
+      // Right: partner feed
+      if (partnerVid && !partnerVid.ended) {
+        ctx.drawImage(partnerVid, W/2, 0, W/2, H);
+      } else {
+        ctx.fillStyle = '#0d0d0d';
+        ctx.fillRect(W/2, 0, W/2, H);
+        ctx.fillStyle = '#333';
+        ctx.font = '13px "DM Mono"';
+        ctx.textAlign = 'center';
+        ctx.fillText('PARTNER', 3*W/4, H/2);
+      }
+
+      // Gold divider
+      ctx.strokeStyle = '#c9a84c'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
+
+      // Labels
+      ctx.fillStyle = 'rgba(8,8,8,.75)';
+      ctx.fillRect(0, H-40, W/2, 40);
+      ctx.fillRect(W/2, H-40, W/2, 40);
+      ctx.fillStyle = '#c9a84c';
+      ctx.font = '500 12px "Noto Sans TC"';
+      ctx.textAlign = 'center';
+      ctx.fillText('說話者 A', W/4, H-16);
+      ctx.fillText('說話者 B', 3*W/4, H-16);
+
+      requestAnimationFrame(draw);
+    }
+    myVid.play();
+    if (partnerVid) partnerVid.play();
+    myVid.addEventListener('ended', () => { rec.stop(); resolve(); }, { once: true });
+    draw();
+  });
+}
+
+function loadVideo(url) {
+  return new Promise((res, rej) => {
+    const v = document.createElement('video');
+    v.src = url; v.muted = true; v.preload = 'auto';
+    v.addEventListener('loadedmetadata', () => res(v));
+    v.addEventListener('error', rej);
+  });
+}
+
+function animateProgress() {
+  const bar = document.getElementById('proc-bar');
+  let p = 0;
+  S.progIv = setInterval(() => {
+    p = Math.min(p + Math.random() * 6, 90);
+    bar.style.width = p + '%';
+  }, 300);
+}
+
+// ══════════════════════════════════════════
+// DOWNLOAD
+// ══════════════════════════════════════════
+function downloadVideo() {
+  if (!S.resultBlob) return;
+  const url = URL.createObjectURL(S.resultBlob);
+  const a = document.createElement('a');
+  a.href = url;
+  const ext = S.resultBlob.type.includes('mp4') ? 'mp4' : 'webm';
+  a.download = `duotalk_${S.code}_${Date.now()}.${ext}`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
+// ══════════════════════════════════════════
+// CLEANUP
+// ══════════════════════════════════════════
+function cleanup() {
+  clearInterval(S.timerIv);
+  clearInterval(S.progIv);
+  if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
+  if (S.ws) { S.ws.close(); S.ws = null; }
+  if (S.recorder && S.recorder.state !== 'inactive') S.recorder.stop();
+  Object.assign(S, {
+    role: null, code: null, stream: null, recorder: null,
+    chunks: [], partnerChunks: [], startTime: null,
+    resultBlob: null, myBlob: null, myDone: false, partnerDone: false,
+  });
+  document.getElementById('join-input').value = '';
+  document.getElementById('join-btn').disabled = true;
+  document.getElementById('join-status').style.display = 'none';
+}
+
+// ══════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════
+let toastTm;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTm);
+  toastTm = setTimeout(() => el.classList.remove('show'), 3500);
+}
+</script>
+</body>
+</html>
