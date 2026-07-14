@@ -329,22 +329,17 @@ video {
   <button class="btn btn-red" onclick="doStop()">停止錄影</button>
 </div>
 
-<!-- PROCESSING -->
-<div class="screen" id="s-processing">
-  <div class="hero" style="font-size:32px">合成中…</div>
-  <div class="prog-wrap"><div class="prog-bar" id="proc-bar"></div></div>
-  <div class="sub" id="proc-label">正在合成對話影片</div>
-</div>
-
 <!-- RESULT -->
 <div class="screen" id="s-result">
-  <div class="mono">完成</div>
-  <canvas id="result-canvas"></canvas>
+  <div class="hero" style="font-size:40px">錄影<br><em>完成</em></div>
+  <div class="div"></div>
+  <div class="sub">各自下載自己的錄影檔<br>即可用剪輯軟體並排合成</div>
   <div class="grid2">
     <div class="gcell"><div class="v" id="res-dur">—</div><div class="l">時長</div></div>
     <div class="gcell"><div class="v" id="res-size">—</div><div class="l">檔案大小</div></div>
   </div>
-  <button class="btn btn-gold" onclick="downloadVideo()">下載影片</button>
+  <button class="btn btn-gold" onclick="downloadMyVideo()">下載我的錄影</button>
+  <div class="note">兩台手機各自按下載<br>檔名含房間號方便對齊</div>
   <button class="btn btn-ghost" onclick="goHome()">重新開始</button>
 </div>
 
@@ -435,11 +430,7 @@ function handleMsg({ type, payload = {} }) {
 }
 
 function handleRelay(payload) {
-  if (payload.event === 'PARTNER_DONE') {
-    S.partnerMime = payload.mime;
-    S.partnerDone = true;
-    tryCompose();
-  }
+  // reserved for future use
 }
 
 // ══════════════════════════════════════════
@@ -612,183 +603,25 @@ function doStopLocal() {
 
 function onMyRecordingDone() {
   S.myBlob = new Blob(S.chunks, { type: S.chunks[0]?.type || 'video/webm' });
-  S.myDone = true;
   const dur = Math.floor((Date.now() - S.startTime) / 1000);
-  document.getElementById('res-dur').textContent =
-    String(Math.floor(dur/60)).padStart(2,'0') + ':' + String(dur%60).padStart(2,'0');
-  // Notify partner we're done
-  send('RELAY', { event: 'PARTNER_DONE', mime: S.myBlob.type });
-  show('s-processing');
-  animateProgress();
-  tryCompose();
-}
-
-// ══════════════════════════════════════════
-// COMPOSE
-// ══════════════════════════════════════════
-function tryCompose() {
-  if (!S.myDone || !S.partnerDone) return; // wait for both
-  compose();
-}
-
-async function compose() {
-  const myBlob = S.myBlob;
-  const partnerMime = S.partnerMime || 'video/webm';
-  const partnerBlob = S.partnerChunks && S.partnerChunks.length
-    ? new Blob(S.partnerChunks.map(b => b instanceof ArrayBuffer ? b : b), { type: partnerMime })
-    : null;
-
-  const myURL = URL.createObjectURL(myBlob);
-  const myVid = await loadVideo(myURL);
-
-  // Use actual video dimensions to avoid distortion
-  const vidW = myVid.videoWidth  || 720;
-  const vidH = myVid.videoHeight || 1280;
-  // Each cell: half width, maintain aspect ratio
-  const cellW = 360;
-  const cellH = Math.round(cellW * vidH / vidW);
-  const W = cellW * 2;
-  const H = cellH;
-
-  const canvas = document.getElementById('result-canvas');
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
-
-  let partnerVid = null;
-  let partnerURL = null;
-  if (partnerBlob && partnerBlob.size > 100) {
-    partnerURL = URL.createObjectURL(partnerBlob);
-    partnerVid = await loadVideo(partnerURL);
-  }
-
-  // ── Audio: pipe my recording's audio into output stream ──
-  const audioCtx = new AudioContext();
-  const outStream = canvas.captureStream(30);
-
-  try {
-    // Create audio source from my recorded video
-    const audioSrc = audioCtx.createMediaElementSource(myVid);
-    const audioDest = audioCtx.createMediaStreamDestination();
-    audioSrc.connect(audioDest);
-    audioSrc.connect(audioCtx.destination); // also play locally during compose
-    // Add audio track to output stream
-    audioDest.stream.getAudioTracks().forEach(t => outStream.addTrack(t));
-  } catch(e) {
-    console.warn('Audio routing failed, composing without audio:', e);
-  }
-
-  const outMime = bestMime();
-  const rec = new MediaRecorder(outStream, { mimeType: outMime, videoBitsPerSecond: 3000000 });
-  const outChunks = [];
-  rec.ondataavailable = e => outChunks.push(e.data);
-
-  rec.onstop = () => {
-    audioCtx.close();
-    const blob = new Blob(outChunks, { type: outMime });
-    S.resultBlob = blob;
-    document.getElementById('res-size').textContent = (blob.size/1024/1024).toFixed(1) + ' MB';
-    clearInterval(S.progIv);
-    document.getElementById('proc-bar').style.width = '100%';
-    URL.revokeObjectURL(myURL);
-    if (partnerURL) URL.revokeObjectURL(partnerURL);
-    setTimeout(() => show('s-result'), 400);
-  };
-
-  rec.start();
-  myVid.currentTime = 0;
-  if (partnerVid) partnerVid.currentTime = 0;
-
-  // Helper: draw video centered & cropped (cover) into a rect, maintaining AR
-  function drawCover(vid, x, y, w, h) {
-    const vr = vid.videoWidth / vid.videoHeight;
-    const cr = w / h;
-    let sx, sy, sw, sh;
-    if (vr > cr) { // video wider than cell → crop sides
-      sh = vid.videoHeight; sw = sh * cr;
-      sy = 0; sx = (vid.videoWidth - sw) / 2;
-    } else { // video taller → crop top/bottom
-      sw = vid.videoWidth; sh = sw / cr;
-      sx = 0; sy = (vid.videoHeight - sh) / 2;
-    }
-    ctx.drawImage(vid, sx, sy, sw, sh, x, y, w, h);
-  }
-
-  await new Promise(resolve => {
-    function draw() {
-      if (myVid.ended) { rec.stop(); resolve(); return; }
-      ctx.fillStyle = '#080808';
-      ctx.fillRect(0, 0, W, H);
-
-      // Left: my feed (mirrored)
-      ctx.save();
-      ctx.beginPath(); ctx.rect(0, 0, cellW, H); ctx.clip();
-      ctx.translate(cellW, 0); ctx.scale(-1, 1);
-      drawCover(myVid, 0, 0, cellW, H);
-      ctx.restore();
-
-      // Right: partner feed
-      if (partnerVid && !partnerVid.ended) {
-        drawCover(partnerVid, cellW, 0, cellW, H);
-      } else {
-        ctx.fillStyle = '#0d0d0d';
-        ctx.fillRect(cellW, 0, cellW, H);
-        ctx.fillStyle = '#333';
-        ctx.font = '13px "DM Mono"';
-        ctx.textAlign = 'center';
-        ctx.fillText('PARTNER', cellW + cellW/2, H/2);
-      }
-
-      // Gold divider
-      ctx.strokeStyle = '#c9a84c'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
-
-      // Labels
-      ctx.fillStyle = 'rgba(8,8,8,.75)';
-      ctx.fillRect(0, H-40, cellW, 40);
-      ctx.fillRect(cellW, H-40, cellW, 40);
-      ctx.fillStyle = '#c9a84c';
-      ctx.font = '500 12px "Noto Sans TC"';
-      ctx.textAlign = 'center';
-      ctx.fillText('說話者 A', cellW/2, H-16);
-      ctx.fillText('說話者 B', cellW + cellW/2, H-16);
-
-      requestAnimationFrame(draw);
-    }
-    myVid.play();
-    if (partnerVid) partnerVid.play();
-    myVid.addEventListener('ended', () => { rec.stop(); resolve(); }, { once: true });
-    draw();
-  });
-}
-
-function loadVideo(url) {
-  return new Promise((res, rej) => {
-    const v = document.createElement('video');
-    v.src = url; v.muted = true; v.preload = 'auto';
-    v.addEventListener('loadedmetadata', () => res(v));
-    v.addEventListener('error', rej);
-  });
-}
-
-function animateProgress() {
-  const bar = document.getElementById('proc-bar');
-  let p = 0;
-  S.progIv = setInterval(() => {
-    p = Math.min(p + Math.random() * 6, 90);
-    bar.style.width = p + '%';
-  }, 300);
+  const mm = String(Math.floor(dur/60)).padStart(2,'0');
+  const ss = String(dur%60).padStart(2,'0');
+  document.getElementById('res-dur').textContent = `${mm}:${ss}`;
+  document.getElementById('res-size').textContent = (S.myBlob.size/1024/1024).toFixed(1) + ' MB';
+  show('s-result');
 }
 
 // ══════════════════════════════════════════
 // DOWNLOAD
 // ══════════════════════════════════════════
-function downloadVideo() {
-  if (!S.resultBlob) return;
-  const url = URL.createObjectURL(S.resultBlob);
+function downloadMyVideo() {
+  if (!S.myBlob) return;
+  const url = URL.createObjectURL(S.myBlob);
   const a = document.createElement('a');
   a.href = url;
-  const ext = S.resultBlob.type.includes('mp4') ? 'mp4' : 'webm';
-  a.download = `duotalk_${S.code}_${Date.now()}.${ext}`;
+  const ext = S.myBlob.type.includes('mp4') ? 'mp4' : 'webm';
+  const role = S.role === 'host' ? 'A' : 'B';
+  a.download = `duotalk_${S.code}_${role}_${Date.now()}.${ext}`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
@@ -798,14 +631,13 @@ function downloadVideo() {
 // ══════════════════════════════════════════
 function cleanup() {
   clearInterval(S.timerIv);
-  clearInterval(S.progIv);
   if (S.stream) { S.stream.getTracks().forEach(t => t.stop()); S.stream = null; }
   if (S.ws) { S.ws.close(); S.ws = null; }
   if (S.recorder && S.recorder.state !== 'inactive') S.recorder.stop();
   Object.assign(S, {
     role: null, code: null, stream: null, recorder: null,
     chunks: [], partnerChunks: [], startTime: null,
-    resultBlob: null, myBlob: null, myDone: false, partnerDone: false,
+    myBlob: null,
   });
   document.getElementById('join-input').value = '';
   document.getElementById('join-btn').disabled = true;
