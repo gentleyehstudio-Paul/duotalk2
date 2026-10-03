@@ -41,6 +41,12 @@ table.quality th { color: var(--muted); font-weight: 600; }
 .tag.ok { color: var(--ok); border-color: var(--ok); }
 .tag.warn { color: var(--warn); border-color: var(--warn); }
 .tag.bad { color: var(--bad); border-color: var(--bad); }
+.timeline { position: relative; height: 28px; background: #1d1d27; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.tl-seg { position: absolute; top: 4px; bottom: 4px; opacity: 0.85; border-right: 2px solid var(--panel); }
+.tl-release { position: absolute; top: 0; bottom: 0; width: 3px; transform: translateX(-1px); outline: 1px solid var(--text); }
+.tl-cursor { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--text); transform: translateX(-1px); pointer-events: none; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; }
+button.link { background: none; color: var(--text); border: 0; padding: 0; text-decoration: underline dotted; font-weight: 500; }
 .viewer { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; }
 .viewer canvas { display: block; width: 100%; height: auto; }
 .scrub { width: 100%; }

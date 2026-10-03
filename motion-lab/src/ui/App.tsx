@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { thresholds } from '../config/thresholds';
 import { extractPoseTrack, summarizeQuality, type ExtractionProgress } from '../pose/extractPoseTrack';
 import { processTrack } from '../processing/processTrack';
+import { segmentShots } from '../segmentation/segmentShots';
+import { ShotTimeline } from './ShotTimeline';
 import { deleteSession, getSession, listSessions, saveSession } from '../storage/db';
 import type { JointQuality, PoseTrack } from '../types/pose';
 import { loadVideoFile, type LoadedVideo } from '../video/loadVideo';
@@ -23,6 +25,8 @@ export function App() {
 
   // 步驟 2：由 PoseTrack + thresholds 決定性地推導（遮罩、平滑、像素、導數、角度）。不存 DB，調參後即時重算。
   const processed = useMemo(() => (track ? processTrack(track) : null), [track]);
+  // 步驟 3：由時間序列事件切出每一球與六個階段。
+  const segmentation = useMemo(() => (processed ? segmentShots(processed) : null), [processed]);
   useEffect(() => setFrameIndex(0), [track]);
 
   const refreshSessions = useCallback(() => {
@@ -84,6 +88,25 @@ export function App() {
     URL.revokeObjectURL(a.href);
   };
 
+  /** 匯入先前匯出的 PoseTrack JSON（沒有原始影片時仍可檢視序列、切分與報告）。 */
+  const onImportJson = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    try {
+      const parsed = JSON.parse(await file.text()) as PoseTrack;
+      if (parsed.schemaVersion !== 1 || !parsed.series?.nose) throw new Error('不是有效的 PoseTrack JSON（schemaVersion 1）。');
+      loaded?.revoke();
+      setLoaded(null);
+      setProgress(null);
+      setSavedId(null);
+      setTrack(parsed);
+      setQuality(summarizeQuality(parsed.series));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   const loadSaved = async (id: string) => {
     const rec = await getSession(id);
     if (!rec) return;
@@ -98,7 +121,7 @@ export function App() {
     <div className="app">
       <header className="top">
         <h1>MOTION LAB</h1>
-        <span className="sub">Form Shooting · 步驟 1–2：逐幀姿態擷取 → 時間序列與平滑</span>
+        <span className="sub">Form Shooting · 步驟 1–3：逐幀姿態擷取 → 時間序列與平滑 → 投籃與階段切分</span>
       </header>
 
       <section className="panel">
@@ -113,6 +136,10 @@ export function App() {
               中止
             </button>
           )}
+          <label className="note" style={{ marginLeft: 'auto' }}>
+            或匯入 PoseTrack JSON{' '}
+            <input type="file" accept=".json,application/json" onChange={onImportJson} disabled={busy} data-testid="import-json" />
+          </label>
         </div>
         {error && <p className="error">{error}</p>}
         {loaded && (
@@ -206,10 +233,19 @@ export function App() {
             )}
           </section>
 
+          {processed && segmentation && (
+            <section className="panel">
+              <h2>
+                5. 投籃與階段切分（{segmentation.shots.length} 球 · 身高尺度 {Number.isNaN(processed.bodyHeightPx) ? '無法估計' : `${processed.bodyHeightPx.toFixed(0)} px / ${processed.bodyHeightSource}`}）
+              </h2>
+              <ShotTimeline processed={processed} result={segmentation} frameIndex={frameIndex} onSeek={setFrameIndex} />
+            </section>
+          )}
+
           {processed && (
             <section className="panel">
               <h2>
-                5. 時間序列與平滑（One Euro：minCutoff {thresholds.smoothing.minCutoffHz} Hz · β {thresholds.smoothing.beta}
+                6. 時間序列與平滑（One Euro：minCutoff {thresholds.smoothing.minCutoffHz} Hz · β {thresholds.smoothing.beta}
                 ）· 點擊曲線跳到該幀
               </h2>
               <div className="meta" style={{ marginBottom: 8 }}>

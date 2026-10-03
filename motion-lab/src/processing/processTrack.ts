@@ -57,13 +57,15 @@ export function processTrack(track: PoseTrack): ProcessedTrack {
   const sideDecision = decideShootingSide(track.series);
 
   const pt = (name: JointName, i: number): Pt => ({ x: joints[name].x[i]!, y: joints[name].y[i]! });
+  // 屈曲量 = 180 − 內角（使用者決定：膝/髖/肘以屈曲量呈現）
+  const flexion = (a: Pt, b: Pt, c: Pt) => 180 - interiorAngleDeg(a, b, c);
   const angleDef: Record<AngleName, (i: number) => number> = {
-    knee_left: (i) => interiorAngleDeg(pt('left_hip', i), pt('left_knee', i), pt('left_ankle', i)),
-    knee_right: (i) => interiorAngleDeg(pt('right_hip', i), pt('right_knee', i), pt('right_ankle', i)),
-    hip_left: (i) => interiorAngleDeg(pt('left_shoulder', i), pt('left_hip', i), pt('left_knee', i)),
-    hip_right: (i) => interiorAngleDeg(pt('right_shoulder', i), pt('right_hip', i), pt('right_knee', i)),
-    elbow_left: (i) => interiorAngleDeg(pt('left_shoulder', i), pt('left_elbow', i), pt('left_wrist', i)),
-    elbow_right: (i) => interiorAngleDeg(pt('right_shoulder', i), pt('right_elbow', i), pt('right_wrist', i)),
+    knee_left: (i) => flexion(pt('left_hip', i), pt('left_knee', i), pt('left_ankle', i)),
+    knee_right: (i) => flexion(pt('right_hip', i), pt('right_knee', i), pt('right_ankle', i)),
+    hip_left: (i) => flexion(pt('left_shoulder', i), pt('left_hip', i), pt('left_knee', i)),
+    hip_right: (i) => flexion(pt('right_shoulder', i), pt('right_hip', i), pt('right_knee', i)),
+    elbow_left: (i) => flexion(pt('left_shoulder', i), pt('left_elbow', i), pt('left_wrist', i)),
+    elbow_right: (i) => flexion(pt('right_shoulder', i), pt('right_elbow', i), pt('right_wrist', i)),
     shoulder_left: (i) => interiorAngleDeg(pt('left_hip', i), pt('left_shoulder', i), pt('left_elbow', i)),
     shoulder_right: (i) => interiorAngleDeg(pt('right_hip', i), pt('right_shoulder', i), pt('right_elbow', i)),
     trunk_lean: (i) => {
@@ -87,8 +89,11 @@ export function processTrack(track: PoseTrack): ProcessedTrack {
   }
 
   const undetected = track.frames.filter((f) => f.status === 'no_pose' || f.status === 'seek_failed').length;
+  const body = estimateBodyHeight(joints, n);
 
   return {
+    bodyHeightPx: body.px,
+    bodyHeightSource: body.source,
     frames,
     t_ms,
     fps,
@@ -101,4 +106,44 @@ export function processTrack(track: PoseTrack): ProcessedTrack {
     facing,
     stats: { totalFrames: n, undetectedFrames: undetected, undetectedRatio: n ? undetected / n : 0 },
   };
+}
+
+function median(xs: number[]): number {
+  if (xs.length === 0) return NaN;
+  const s = [...xs].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m]! : (s[m - 1]! + s[m]!) / 2;
+}
+
+/**
+ * 身高（像素）估計：鼻子到較低腳踝的垂直距離的中位數 ÷ 身高比例；
+ * 不足時用軀幹長度（肩中點到髖中點）÷ 軀幹比例。
+ */
+function estimateBodyHeight(joints: Record<JointName, ProcessedJoint>, n: number): { px: number; source: ProcessedTrack['bodyHeightSource'] } {
+  const cfg = thresholds.bodyScale;
+  const na: number[] = [];
+  const trunk: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const nose = joints.nose.y[i]!;
+    const la = joints.left_ankle.y[i]!;
+    const ra = joints.right_ankle.y[i]!;
+    const ankle = Number.isNaN(la) ? ra : Number.isNaN(ra) ? la : Math.max(la, ra);
+    if (!Number.isNaN(nose) && !Number.isNaN(ankle) && ankle > nose) na.push(ankle - nose);
+
+    const sh = avg(joints.left_shoulder.y[i]!, joints.right_shoulder.y[i]!);
+    const hp = avg(joints.left_hip.y[i]!, joints.right_hip.y[i]!);
+    const shx = avg(joints.left_shoulder.x[i]!, joints.right_shoulder.x[i]!);
+    const hpx = avg(joints.left_hip.x[i]!, joints.right_hip.x[i]!);
+    if (![sh, hp, shx, hpx].some(Number.isNaN)) trunk.push(Math.hypot(shx - hpx, sh - hp));
+  }
+  if (na.length >= cfg.minValidFrames) return { px: median(na) / cfg.noseToAnkleStatureRatio, source: 'nose_ankle' };
+  if (trunk.length >= cfg.minValidFrames) return { px: median(trunk) / cfg.trunkToStatureRatio, source: 'trunk' };
+  return { px: NaN, source: 'none' };
+}
+
+/** 兩值平均；任一為 NaN 時回傳另一個（側拍時遠側常缺）。 */
+export function avg(a: number, b: number): number {
+  if (Number.isNaN(a)) return b;
+  if (Number.isNaN(b)) return a;
+  return (a + b) / 2;
 }

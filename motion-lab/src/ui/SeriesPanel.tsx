@@ -144,7 +144,7 @@ export function SeriesPanel({ processed, frameIndex, onSeek }: Props) {
             ))}
           </select>
         </label>
-        <span className="note">關節角為內角（180° = 伸直）；trunk_lean 正值 = 向面向方向前傾。缺值處曲線中斷。</span>
+        <span className="note">knee/hip/elbow = 屈曲量（0° 伸直，越大越彎）；shoulder = 抬臂角；trunk_lean 正值 = 向面向方向前傾。缺值處曲線中斷。</span>
       </div>
       <div style={{ width: '100%', height: 220 }}>
         <ResponsiveContainer>

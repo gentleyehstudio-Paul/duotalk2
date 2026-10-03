@@ -15,7 +15,7 @@
 | --- | --- | --- |
 | 1 | 影片載入與逐幀姿態擷取 | ✅ 完成 |
 | 2 | 時間序列與平滑（One Euro Filter、缺值、像素座標、速度/加速度、角度序列、投籃側/面向） | ✅ 完成 |
-| 3 | 投籃與階段切分 | ⏳ |
+| 3 | 投籃與階段切分（Release 事件偵測、六階段、單球/多球、無法判讀原因） | ✅ 完成 |
 | 4 | 指標計算 | ⏳ |
 | 5 | 動態骨架播放器 | ⏳ |
 | 6 | 規則引擎與報告 | ⏳ |
@@ -57,6 +57,11 @@ src/processing/angles.ts   三點內角、相對鉛直傾角
 src/processing/side.ts     投籃側（visibility）與面向（鼻子 vs 肩中點）判定
 src/processing/processTrack.ts 步驟 2 主流程：遮罩 → 平滑 → 像素 → 速度/加速度 → 角度序列
 src/ui/SeriesPanel.tsx     原始 vs 平滑曲線、角度曲線（Recharts），點擊跳幀
+src/types/shot.ts          Shot / Phase / 事件 / 無法切分原因
+src/segmentation/peaks.ts  含缺值序列的峰值與 prominence、最小間隔抑制
+src/segmentation/segmentShots.ts 步驟 3 主流程：手腕高度峰值 → Release 事件 → Dip/Setup/Set Point/Follow-through
+src/testutils/syntheticShot.ts 合成投籃骨架（測試用，含 ground truth）
+src/ui/ShotTimeline.tsx    階段時間軸、每球表格、Release ±N 幀循環片段
 src/ui/                    React UI（步驟 1：上傳、進度、品質摘要、逐幀核對）
 docs/PARAMETERS.md         可調參數清單（位置、預設值、用途）
 ```

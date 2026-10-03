@@ -67,20 +67,26 @@ describe('processTrack', () => {
     expect(p.angles.elbow_left.valid.every((v) => !v)).toBe(true);
   });
 
-  it('computes elbow angle opening from ~90 to ~180 degrees', () => {
+  it('computes elbow flexion closing from ~90 to ~0 degrees (flexion = 180 − interior)', () => {
     expect(p.angles.elbow_right.deg[0]).toBeCloseTo(90, 0);
-    expect(p.angles.elbow_right.deg[59]!).toBeGreaterThan(170);
-    // angular velocity positive while extending
-    expect(p.angles.elbow_right.vel[20]!).toBeGreaterThan(0);
+    expect(p.angles.elbow_right.deg[59]!).toBeLessThan(10);
+    // flexion decreases while extending → negative angular velocity
+    expect(p.angles.elbow_right.vel[20]!).toBeLessThan(0);
   });
 
-  it('knee angle reaches its minimum near peak bend (~1 s), from the time series', () => {
+  it('knee flexion peaks near maximum bend (~1 s), from the time series', () => {
     const deg = p.angles.knee_right.deg;
-    let minI = 0;
+    let maxI = 0;
     deg.forEach((v, i) => {
-      if (!Number.isNaN(v) && v < deg[minI]!) minI = i;
+      if (!Number.isNaN(v) && v > deg[maxI]!) maxI = i;
     });
-    expect(Math.abs(minI - 30)).toBeLessThanOrEqual(3);
+    expect(Math.abs(maxI - 30)).toBeLessThanOrEqual(3);
+  });
+
+  it('estimates body height from nose–ankle distance', () => {
+    // nose y=220, ankle y=800 → 580 px / 0.87
+    expect(p.bodyHeightSource).toBe('nose_ankle');
+    expect(p.bodyHeightPx).toBeCloseTo(580 / thresholds.bodyScale.noseToAnkleStatureRatio, 0);
   });
 
   it('picks shooting side and facing from the data', () => {

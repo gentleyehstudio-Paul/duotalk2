@@ -95,6 +95,68 @@ export const thresholds = {
     facingMinNoseOffsetRatio: 0.1,
   },
 
+  /** 步驟 3：身高尺度估計（所有「相對身高」的量都除以這個像素值）。 */
+  bodyScale: {
+    /** 鼻子到腳踝的距離約佔身高的比例，用來把量到的像素距離換算成身高。 */
+    noseToAnkleStatureRatio: 0.87,
+    /** 估身高至少需要幾個有效幀（鼻子與腳踝同時有效）。 */
+    minValidFrames: 10,
+    /** 備援：鼻子/腳踝不可用時，用肩中點到髖中點的軀幹長度換算，軀幹約佔身高的比例。 */
+    trunkToStatureRatio: 0.3,
+  },
+
+  /** 步驟 3：投籃切分（找 Release）與六階段切分。長度單位「身高比」= 像素 / 估計身高像素。 */
+  segmentation: {
+    /** Release 候選：投籃側手腕高於肩線至少幾個身高比。 */
+    minReleaseHeightRatio: 0.15,
+    /** Release 候選：手腕高度峰值的 prominence（相對左右谷底的高度差）至少幾個身高比。 */
+    minReleaseProminenceRatio: 0.12,
+    /** 兩次出手最短間隔（毫秒）；距離更近的峰值只保留較高者。 */
+    minShotIntervalMs: 1500,
+    /** 從 Release 往前看幾毫秒內，要有一段向上的手腕速度（確認是出手而不是舉手）。 */
+    riseWindowMs: 1500,
+    /** 上升段手腕向上速度峰值至少幾個身高比/秒。 */
+    minRiseSpeedRatioPerS: 0.5,
+    /** Release 時刻 = 上升速度峰值之後，手腕向上速度第一次降到此值（身高比/秒）以下的那一幀。 */
+    releaseUpSpeedRatioPerS: 0.15,
+    /** Release 時肘屈曲量不得大於此值（度；0 = 完全伸直）。 */
+    maxElbowFlexionAtReleaseDeg: 50,
+    /** 從 Release 往前搜尋 Dip 底與 Dip 起點的視窗（毫秒）。 */
+    dipSearchWindowMs: 2500,
+    /** Dip 起點（膝）：膝屈曲量比視窗內最伸直的基準多出此度數即視為開始下蹲。 */
+    dipOnsetKneeFlexionDeg: 5,
+    /** Dip 起點（手腕）：手腕比下蹲前的高度降低此身高比即視為開始下沉。 */
+    dipOnsetWristDropRatio: 0.03,
+    /** Dip 起點由門檻偵測到後，最多往前回溯幾毫秒找到動作真正開始（前一幀仍安靜）的那一幀。 */
+    dipOnsetBacktrackMaxMs: 300,
+    /** Setup 往前最多延伸幾毫秒。 */
+    setupMaxMs: 1000,
+    /** Setup 安靜判定：手腕速率低於此身高比/秒。 */
+    setupQuietWristSpeedRatioPerS: 0.15,
+    /** Setup 安靜判定：膝角速度絕對值低於此度/秒。 */
+    setupQuietKneeVelDegPerS: 20,
+    /** Set Point：Release 前最後一次肘屈曲局部極大，且屈曲量至少此度數。 */
+    minSetPointElbowFlexionDeg: 45,
+    /** Set Point 必須比 Release 早至少幾毫秒。 */
+    minSetPointToReleaseMs: 50,
+    /** Follow-through 結束：手腕比 Release 高度下降此身高比。 */
+    followThroughEndWristDropRatio: 0.05,
+    /** Follow-through 結束：肘屈曲量比 Release 時增加此度數（手臂收回）。 */
+    followThroughEndElbowFlexionDeg: 20,
+    /** Follow-through 最長（毫秒）；超過即截斷並標記。 */
+    followThroughMaxMs: 1500,
+    /** 一球範圍內投籃側手腕與手肘的有效幀比例低於此值 → 該球標為無法判讀。 */
+    minValidRatioInShot: 0.7,
+  },
+
+  /** 顯示相關（規則 1：關鍵時刻一律附帶前後 ±N 幀的動態片段）。 */
+  display: {
+    /** 顯示 Release 等關鍵時刻時，前後各帶幾幀一起循環播放。 */
+    eventContextFrames: 8,
+    /** 關鍵時刻片段循環播放的每幀停留毫秒數。 */
+    eventClipFrameIntervalMs: 120,
+  },
+
   /** 骨架資料品質門檻。 */
   quality: {
     /** 單一關節 visibility 低於此值的幀視為「缺值」，後續不得用來計算（不補造）。 */

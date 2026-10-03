@@ -36,7 +36,12 @@ export const ANGLE_NAMES = [
 export type AngleName = (typeof ANGLE_NAMES)[number];
 
 export interface AngleSeries {
-  /** 角度（度）。關節角為內角（180 = 伸直）；trunk_lean 為相對鉛直線的前傾角，正值 = 向面向方向前傾。 */
+  /**
+   * 角度（度）。
+   * - knee / hip / elbow：屈曲量 = 180 − 內角（0 = 伸直，越大越彎）。
+   * - shoulder：抬臂角 = 髖–肩–肘內角（手臂貼身 ≈ 0，高舉過頭 ≈ 180）。
+   * - trunk_lean：相對鉛直線的前傾角，正值 = 向面向方向前傾。
+   */
   deg: number[];
   /** 角速度（deg/s）；跨缺口為 NaN。 */
   vel: number[];
@@ -58,6 +63,9 @@ export interface ProcessedTrack {
   shootingSideSource: 'config' | 'auto' | 'auto_uncertain';
   /** 射手面向畫面的左或右；由鼻子相對肩膀中點的位置多數決。 */
   facing: Side | 'unknown';
+  /** 估計身高（像素）；所有「相對身高」的量都除以它。無法估計時為 NaN。 */
+  bodyHeightPx: number;
+  bodyHeightSource: 'nose_ankle' | 'trunk' | 'none';
   /** 整段的有效幀統計。 */
   stats: {
     totalFrames: number;

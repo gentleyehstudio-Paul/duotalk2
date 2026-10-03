@@ -6,6 +6,8 @@
 export const chartColors = {
   series: ['#b8862a', '#8b5cf6', '#1fa897', '#d94f4f'] as const,
   raw: '#6b6b78',
+  /** 第五個類別色（階段時間軸的 Follow-through）。 */
+  phaseExtra: '#3b82f6',
   grid: '#262633',
   axis: '#9a98a3',
   cursor: '#e8e6e3',
