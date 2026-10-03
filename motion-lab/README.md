@@ -1,0 +1,67 @@
+# MOTION LAB — Form Shooting（V1 PWA）
+
+個人投籃動作研究工具。單一固定側拍影片 → 逐幀骨架時間序列 → 關節角度 / 位移 / 時序 → Session 比較 → 觀察、Cue、Drill、Retest。
+訓練循環：Measure → Compare → Adjust → Retest。
+
+三條硬性規則：
+
+1. 影片是唯一分析來源，禁止單幀判斷（只收 mp4/mov，逐幀處理，所有指標來自時間序列）。
+2. 動態骨架圖分析（骨架逐幀同步、軌跡、角度曲線連動、階段時間軸、Release 對齊比較）。
+3. 輸出重點整理與建議，不打總分（規則引擎產生，條件不成立不輸出）。
+
+## 開發進度
+
+| 步驟 | 內容 | 狀態 |
+| --- | --- | --- |
+| 1 | 影片載入與逐幀姿態擷取 | ✅ 完成 |
+| 2 | 時間序列與平滑（One Euro Filter、缺值） | ⏳ |
+| 3 | 投籃與階段切分 | ⏳ |
+| 4 | 指標計算 | ⏳ |
+| 5 | 動態骨架播放器 | ⏳ |
+| 6 | 規則引擎與報告 | ⏳ |
+| 7 | Session 比較 | ⏳ |
+
+產品決定：**一段影片投一球即可分析**（`thresholds.shots.minShotsPerSession = 1`）。多球影片仍會自動切分每一球；
+球數不足以計算一致性（CV）時，報告會在「無法判讀」中明列，而不是拒絕分析。
+
+## 執行
+
+```bash
+cd motion-lab
+npm install        # 會自動複製 MediaPipe WASM 到 public/wasm，並下載 pose_landmarker_full.task 到 public/models
+npm run dev        # http://localhost:5173
+npm test           # 單元測試（vitest）
+npm run build      # 產出 PWA（dist/）
+```
+
+若 `npm install` 時無法下載模型，App 會在執行期退回從 MediaPipe CDN 載入；要完全離線請手動把
+`pose_landmarker_full.task` 放到 `public/models/`。
+
+## 目錄
+
+```
+src/config/thresholds.ts   所有可調數值（唯一來源）
+src/config/assets.ts       模型 / WASM 路徑
+src/types/pose.ts          PoseTrack / JointSample 等資料結構
+src/pose/joints.ts         33 關節名稱、骨架連線
+src/pose/landmarker.ts     MediaPipe PoseLandmarker 初始化（VIDEO 模式、GPU→CPU 退回）
+src/pose/extractPoseTrack.ts 主流程：FPS 量測 → 幀計畫 → 逐幀 seek + detectForVideo → PoseTrack
+src/video/loadVideo.ts     檔案驗證（只收影片）與載入
+src/video/fps.ts           FPS 量測（rVFC）與中位數估計
+src/video/frameStepper.ts  逐幀步進器（seek + 真實 mediaTime 核對、重複幀處理）
+src/storage/db.ts          IndexedDB（sessions / shots / findings / experiments）
+src/ui/                    React UI（步驟 1：上傳、進度、品質摘要、逐幀核對）
+docs/PARAMETERS.md         可調參數清單（位置、預設值、用途）
+```
+
+## 資料結構（步驟 1 產出）
+
+`PoseTrack`：
+
+- `video`：檔名、寬高、長度、fps（量測或預設）。
+- `frames[]`：每幀 `{frame, t_ms, status, mediaTime}`，status ∈ ok / no_pose / seek_failed / duplicate。
+- `series[jointName][]`：每個關節一條時間序列 `{frame, t_ms, x, y, z, visibility}`；x/y 為 0..1 正規化座標；
+  未偵測到人或 seek 失敗的幀 x/y/z 為 `null`（缺值，不補造）。
+- `extraction`：擷取時的 stride、minVisibility、模型路徑、推論裝置快照。
+
+存入 IndexedDB 的只有這份 JSON；原始影片由使用者自行保留。

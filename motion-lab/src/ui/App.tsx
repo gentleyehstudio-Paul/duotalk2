@@ -1,0 +1,300 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { thresholds } from '../config/thresholds';
+import { extractPoseTrack, summarizeQuality, type ExtractionProgress } from '../pose/extractPoseTrack';
+import { deleteSession, getSession, listSessions, saveSession } from '../storage/db';
+import type { JointQuality, PoseTrack } from '../types/pose';
+import { loadVideoFile, type LoadedVideo } from '../video/loadVideo';
+import { FramePreview } from './FramePreview';
+
+type SessionSummary = Awaited<ReturnType<typeof listSessions>>[number];
+
+export function App() {
+  const [loaded, setLoaded] = useState<LoadedVideo | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState<ExtractionProgress | null>(null);
+  const [track, setTrack] = useState<PoseTrack | null>(null);
+  const [quality, setQuality] = useState<JointQuality[] | null>(null);
+  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const refreshSessions = useCallback(() => {
+    listSessions().then(setSessions).catch(() => setSessions([]));
+  }, []);
+  useEffect(refreshSessions, [refreshSessions]);
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError(null);
+    setTrack(null);
+    setQuality(null);
+    setSavedId(null);
+    setProgress(null);
+    loaded?.revoke();
+    try {
+      const lv = await loadVideoFile(file);
+      setLoaded(lv);
+    } catch (err) {
+      setLoaded(null);
+      setError((err as Error).message);
+    }
+  };
+
+  const start = async () => {
+    if (!loaded) return;
+    setError(null);
+    setTrack(null);
+    setQuality(null);
+    setSavedId(null);
+    const ac = new AbortController();
+    abortRef.current = ac;
+    try {
+      const t = await extractPoseTrack(loaded, { onProgress: setProgress, signal: ac.signal });
+      setTrack(t);
+      setQuality(summarizeQuality(t.series));
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') setError((err as Error).message);
+    } finally {
+      abortRef.current = null;
+    }
+  };
+
+  const save = async () => {
+    if (!track) return;
+    const rec = await saveSession(track.video.fileName.replace(/\.[^.]+$/, ''), track);
+    setSavedId(rec.id);
+    refreshSessions();
+  };
+
+  const exportJson = () => {
+    if (!track) return;
+    const blob = new Blob([JSON.stringify(track)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${track.video.fileName.replace(/\.[^.]+$/, '')}.posetrack.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const loadSaved = async (id: string) => {
+    const rec = await getSession(id);
+    if (!rec) return;
+    setTrack(rec.track);
+    setQuality(summarizeQuality(rec.track.series));
+    setSavedId(rec.id);
+  };
+
+  const busy = progress !== null && progress.phase !== 'done' && !error && !track;
+
+  return (
+    <div className="app">
+      <header className="top">
+        <h1>MOTION LAB</h1>
+        <span className="sub">Form Shooting · 步驟 1：影片載入與逐幀姿態擷取</span>
+      </header>
+
+      <section className="panel">
+        <h2>1. 選擇側拍影片（mp4 / mov；影片不會上傳，全程在瀏覽器處理）</h2>
+        <div className="row">
+          <input type="file" accept=".mp4,.mov,.m4v,video/mp4,video/quicktime" onChange={onFile} disabled={busy} />
+          <button onClick={start} disabled={!loaded || busy}>
+            開始逐幀擷取
+          </button>
+          {busy && (
+            <button className="secondary" onClick={() => abortRef.current?.abort()}>
+              中止
+            </button>
+          )}
+        </div>
+        {error && <p className="error">{error}</p>}
+        {loaded && (
+          <div className="meta" style={{ marginTop: 12 }}>
+            <div>
+              <span>檔名</span>
+              <br />
+              <b>{loaded.file.name}</b>
+            </div>
+            <div>
+              <span>解析度</span>
+              <br />
+              <b>
+                {loaded.width} × {loaded.height}
+              </b>
+            </div>
+            <div>
+              <span>長度</span>
+              <br />
+              <b>{(loaded.durationMs / 1000).toFixed(2)} s</b>
+            </div>
+            <div>
+              <span>大小</span>
+              <br />
+              <b>{(loaded.file.size / 1024 / 1024).toFixed(1)} MB</b>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {progress && (
+        <section className="panel">
+          <h2>2. 擷取進度</h2>
+          <ProgressView p={progress} />
+        </section>
+      )}
+
+      {track && quality && (
+        <>
+          <section className="panel">
+            <h2>3. 時間序列品質摘要（visibility ≥ {thresholds.quality.minVisibility} 視為有效幀）</h2>
+            <div className="meta" style={{ marginBottom: 12 }}>
+              <div>
+                <span>FPS</span>
+                <br />
+                <b>
+                  {track.video.fps} <small className="note">({track.video.fpsSource === 'measured' ? '量測' : '預設值'})</small>
+                </b>
+              </div>
+              <div>
+                <span>序列幀數</span>
+                <br />
+                <b>{track.frameCount}</b>
+              </div>
+              <div>
+                <span>未偵測到人</span>
+                <br />
+                <b>{track.frames.filter((f) => f.status === 'no_pose').length}</b>
+              </div>
+              <div>
+                <span>seek 失敗 / 重複幀</span>
+                <br />
+                <b>
+                  {track.frames.filter((f) => f.status === 'seek_failed').length} /{' '}
+                  {track.frames.filter((f) => f.status === 'duplicate').length}
+                </b>
+              </div>
+              <div>
+                <span>推論</span>
+                <br />
+                <b>{track.extraction.delegate}</b>
+              </div>
+            </div>
+            <QualityTable rows={quality} />
+            <div className="row" style={{ marginTop: 12 }}>
+              <button onClick={save} disabled={!!savedId}>
+                {savedId ? '已存入 IndexedDB' : '存入 IndexedDB'}
+              </button>
+              <button className="secondary" onClick={exportJson}>
+                匯出 PoseTrack JSON
+              </button>
+            </div>
+          </section>
+
+          <section className="panel">
+            <h2>4. 逐幀核對（拖曳或 ←/→ 逐幀；用來驗證骨架與畫面是否對齊）</h2>
+            {loaded ? (
+              <FramePreview video={loaded.element} track={track} />
+            ) : (
+              <p className="note">這是從 IndexedDB 載入的 Session，沒有原始影片可疊圖；重新選擇同一支影片即可對照。</p>
+            )}
+          </section>
+        </>
+      )}
+
+      <section className="panel">
+        <h2>已儲存的 Session（只存骨架 JSON，不含影片）</h2>
+        {sessions.length === 0 ? (
+          <p className="note">尚無資料。</p>
+        ) : (
+          <ul className="sessions" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {sessions.map((s) => (
+              <li key={s.id}>
+                <b>{s.name}</b>
+                <span>{s.fileName}</span>
+                <span>{s.frameCount} 幀</span>
+                <span>{new Date(s.createdAt).toLocaleString()}</span>
+                <button className="secondary" onClick={() => loadSaved(s.id)}>
+                  載入
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() => {
+                    if (confirm(`刪除「${s.name}」？`)) deleteSession(s.id).then(refreshSessions);
+                  }}
+                >
+                  刪除
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ProgressView({ p }: { p: ExtractionProgress }) {
+  const label: Record<ExtractionProgress['phase'], string> = {
+    loading_model: '載入 PoseLandmarker 模型…',
+    measuring_fps: '量測影片 FPS…',
+    extracting: '逐幀擷取中',
+    done: '完成',
+  };
+  const pct = p.totalFrames ? (p.frame / p.totalFrames) * 100 : 0;
+  return (
+    <div>
+      <div className="row">
+        <b>{label[p.phase]}</b>
+        {p.phase === 'extracting' && (
+          <span className="note">
+            {p.frame} / {p.totalFrames} 幀 · {p.fps} fps · 已用 {(p.elapsedMs / 1000).toFixed(0)}s · 預估剩餘{' '}
+            {(p.etaMs / 1000).toFixed(0)}s
+          </span>
+        )}
+      </div>
+      <div className="progress">
+        <div style={{ width: `${pct}%` }} />
+      </div>
+      <span className="note">
+        偵測 {p.detected} · 無人 {p.noPose} · seek 失敗 {p.seekFailed} · 重複 {p.duplicates}
+      </span>
+    </div>
+  );
+}
+
+function QualityTable({ rows }: { rows: JointQuality[] }) {
+  const minRatio = thresholds.quality.minValidFrameRatio;
+  return (
+    <table className="quality">
+      <thead>
+        <tr>
+          <th>關節</th>
+          <th>有效幀 / 總幀</th>
+          <th>有效比例</th>
+          <th>平均 visibility</th>
+          <th>狀態</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => {
+          const cls = r.validRatio >= minRatio ? 'ok' : r.validRatio >= minRatio / 2 ? 'warn' : 'bad';
+          return (
+            <tr key={r.joint}>
+              <td>
+                <code>{r.joint}</code>
+              </td>
+              <td>
+                {r.validFrames} / {r.totalFrames}
+              </td>
+              <td>{(r.validRatio * 100).toFixed(1)}%</td>
+              <td>{r.meanVisibility.toFixed(2)}</td>
+              <td>
+                <span className={`tag ${cls}`}>{cls === 'ok' ? '可用' : cls === 'warn' ? '偏低' : '無法判讀'}</span>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
