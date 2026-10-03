@@ -19,7 +19,7 @@
 | 4 | 指標計算（7 項首批指標、Session 彙總、CV、個人基準與偏離） | ✅ 完成 |
 | 5 | 動態骨架播放器（逐幀同步、慢放、軌跡、階段時間軸、角度曲線連動） | ✅ 完成 |
 | 6 | 規則引擎與報告（rules.yaml、重點整理、最多 2 條建議、無法判讀、Finding / Experiment / Retest） | ✅ 完成 |
-| 7 | Session 比較 | ⏳ |
+| 7 | Session 比較（Release 對齊、並排同步播放、角度曲線疊圖、指標並列） | ✅ 完成 |
 
 產品決定：**一段影片投一球即可分析**（`thresholds.shots.minShotsPerSession = 1`）。多球影片仍會自動切分每一球；
 球數不足以計算一致性（CV）時，報告會在「無法判讀」中明列，而不是拒絕分析。
@@ -77,6 +77,9 @@ src/rules/loadRules.ts     YAML 解析與驗證（未知指標、缺欄位、禁
 src/rules/engine.ts        規則評估、報告組裝（重點整理 / 建議 / 無法判讀）、Markdown 輸出、禁用詞守門
 src/types/report.ts        Rule / RuleEvaluation / Recommendation / Highlight / Report
 src/ui/ReportPanel.tsx     報告面板、開始實驗、記錄 Retest、規則評估明細
+src/compare/align.ts       Release 對齊：τ 範圍、τ → 幀、疊圖取樣、階段查詢
+src/ui/compare/ComparePanel.tsx Session/球選擇、附加影片、對齊主時鐘並排播放、指標並列
+src/ui/compare/OverlayCurves.tsx 四條角度曲線 A/B 疊圖（τ 軸，紅線 = Release）
 src/ui/                    React UI（步驟 1：上傳、進度、品質摘要、逐幀核對）
 docs/PARAMETERS.md         可調參數清單（位置、預設值、用途）
 ```

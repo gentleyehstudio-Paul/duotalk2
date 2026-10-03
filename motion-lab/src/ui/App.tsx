@@ -14,6 +14,7 @@ import { buildReport } from '../rules/engine';
 import { getRules } from '../rules/rulesSource';
 import type { Recommendation, Report } from '../types/report';
 import { ReportPanel } from './ReportPanel';
+import { ComparePanel, type SessionOption } from './compare/ComparePanel';
 import type { JointQuality, PoseTrack } from '../types/pose';
 import { loadVideoFile, type LoadedVideo } from '../video/loadVideo';
 import { Player } from './player/Player';
@@ -184,13 +185,37 @@ export function App() {
 
   const busy = progress !== null && progress.phase !== 'done' && !error && !track;
 
+  // 步驟 7：比較用的 Session 選項 = 已儲存的 Session + 目前未儲存的分析。
+  const [tab, setTab] = useState<'analyze' | 'compare'>('analyze');
+  const compareOptions = useMemo<SessionOption[]>(() => {
+    const saved = sessions.map((s) => ({ id: s.id, name: s.name }));
+    if (track && !savedId) return [{ id: '__current__', name: `目前分析（未儲存）：${sessionName}`, track }, ...saved];
+    return saved;
+  }, [sessions, track, savedId, sessionName]);
+
   return (
     <div className="app">
       <header className="top">
         <h1>MOTION LAB</h1>
-        <span className="sub">Form Shooting · 步驟 1–6：逐幀姿態擷取 → 時間序列 → 階段切分 → 指標 → 播放器 → 規則引擎與報告</span>
+        <span className="sub">Form Shooting · Measure → Compare → Adjust → Retest</span>
+        <nav className="tabs">
+          <button className={tab === 'analyze' ? '' : 'secondary'} onClick={() => setTab('analyze')} data-testid="tab-analyze">
+            分析
+          </button>
+          <button className={tab === 'compare' ? '' : 'secondary'} onClick={() => setTab('compare')} data-testid="tab-compare">
+            Session 比較
+          </button>
+        </nav>
       </header>
 
+      {tab === 'compare' && (
+        <section className="panel">
+          <h2>Session 比較（兩球以 Release 對齊 · 並排同步播放 · 角度曲線疊圖 · 指標並列）</h2>
+          <ComparePanel options={compareOptions} />
+        </section>
+      )}
+
+      <div hidden={tab === 'compare'}>
       <section className="panel">
         <h2>1. 選擇側拍影片（mp4 / mov；影片不會上傳，全程在瀏覽器處理）</h2>
         <div className="row">
@@ -407,6 +432,7 @@ export function App() {
           </ul>
         )}
       </section>
+      </div>
     </div>
   );
 }

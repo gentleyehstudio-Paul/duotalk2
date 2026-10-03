@@ -56,6 +56,12 @@ button.link { background: none; color: var(--text); border: 0; padding: 0; text-
 .report ul.unreadable { padding-left: 0; list-style: none; }
 .report ul.unreadable li { padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
 .report .tag { margin-right: 6px; }
+.tabs { display: flex; gap: 6px; margin-left: auto; }
+.tabs button { padding: 6px 12px; }
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.compare-side-ctl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sub-h { font-size: 14px; margin: 14px 0 6px; color: var(--muted); font-weight: 600; }
+@media (max-width: 700px) { .compare-grid { grid-template-columns: 1fr; } }
 .controls { margin-top: 6px; }
 .controls .seg { display: inline-flex; gap: 4px; }
 .controls .seg button { padding: 6px 10px; }
