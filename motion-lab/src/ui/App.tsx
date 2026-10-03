@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { thresholds } from '../config/thresholds';
 import { extractPoseTrack, summarizeQuality, type ExtractionProgress } from '../pose/extractPoseTrack';
+import { processTrack } from '../processing/processTrack';
 import { deleteSession, getSession, listSessions, saveSession } from '../storage/db';
 import type { JointQuality, PoseTrack } from '../types/pose';
 import { loadVideoFile, type LoadedVideo } from '../video/loadVideo';
 import { FramePreview } from './FramePreview';
+import { SeriesPanel } from './SeriesPanel';
 
 type SessionSummary = Awaited<ReturnType<typeof listSessions>>[number];
 
@@ -16,7 +18,12 @@ export function App() {
   const [quality, setQuality] = useState<JointQuality[] | null>(null);
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [savedId, setSavedId] = useState<string | null>(null);
+  const [frameIndex, setFrameIndex] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
+
+  // 步驟 2：由 PoseTrack + thresholds 決定性地推導（遮罩、平滑、像素、導數、角度）。不存 DB，調參後即時重算。
+  const processed = useMemo(() => (track ? processTrack(track) : null), [track]);
+  useEffect(() => setFrameIndex(0), [track]);
 
   const refreshSessions = useCallback(() => {
     listSessions().then(setSessions).catch(() => setSessions([]));
@@ -91,7 +98,7 @@ export function App() {
     <div className="app">
       <header className="top">
         <h1>MOTION LAB</h1>
-        <span className="sub">Form Shooting · 步驟 1：影片載入與逐幀姿態擷取</span>
+        <span className="sub">Form Shooting · 步驟 1–2：逐幀姿態擷取 → 時間序列與平滑</span>
       </header>
 
       <section className="panel">
@@ -193,11 +200,48 @@ export function App() {
           <section className="panel">
             <h2>4. 逐幀核對（拖曳或 ←/→ 逐幀；用來驗證骨架與畫面是否對齊）</h2>
             {loaded ? (
-              <FramePreview video={loaded.element} track={track} />
+              <FramePreview video={loaded.element} track={track} index={frameIndex} onIndexChange={setFrameIndex} />
             ) : (
               <p className="note">這是從 IndexedDB 載入的 Session，沒有原始影片可疊圖；重新選擇同一支影片即可對照。</p>
             )}
           </section>
+
+          {processed && (
+            <section className="panel">
+              <h2>
+                5. 時間序列與平滑（One Euro：minCutoff {thresholds.smoothing.minCutoffHz} Hz · β {thresholds.smoothing.beta}
+                ）· 點擊曲線跳到該幀
+              </h2>
+              <div className="meta" style={{ marginBottom: 8 }}>
+                <div>
+                  <span>投籃側</span>
+                  <br />
+                  <b>
+                    {processed.shootingSide}{' '}
+                    <small className="note">
+                      ({processed.shootingSideSource === 'config' ? '設定' : processed.shootingSideSource === 'auto' ? '自動' : '自動・不確定'})
+                    </small>
+                  </b>
+                </div>
+                <div>
+                  <span>面向</span>
+                  <br />
+                  <b>{processed.facing}</b>
+                </div>
+                <div>
+                  <span>未偵測幀比例</span>
+                  <br />
+                  <b>
+                    {(processed.stats.undetectedRatio * 100).toFixed(1)}%{' '}
+                    {processed.stats.undetectedRatio > thresholds.quality.maxUndetectedFrameRatio && (
+                      <span className="tag bad">超過上限，整段視為機位不符</span>
+                    )}
+                  </b>
+                </div>
+              </div>
+              <SeriesPanel processed={processed} frameIndex={frameIndex} onSeek={setFrameIndex} />
+            </section>
+          )}
         </>
       )}
 

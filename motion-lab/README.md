@@ -14,7 +14,7 @@
 | 步驟 | 內容 | 狀態 |
 | --- | --- | --- |
 | 1 | 影片載入與逐幀姿態擷取 | ✅ 完成 |
-| 2 | 時間序列與平滑（One Euro Filter、缺值） | ⏳ |
+| 2 | 時間序列與平滑（One Euro Filter、缺值、像素座標、速度/加速度、角度序列、投籃側/面向） | ✅ 完成 |
 | 3 | 投籃與階段切分 | ⏳ |
 | 4 | 指標計算 | ⏳ |
 | 5 | 動態骨架播放器 | ⏳ |
@@ -50,6 +50,13 @@ src/video/loadVideo.ts     檔案驗證（只收影片）與載入
 src/video/fps.ts           FPS 量測（rVFC）與中位數估計
 src/video/frameStepper.ts  逐幀步進器（seek + 真實 mediaTime 核對、重複幀處理）
 src/storage/db.ts          IndexedDB（sessions / shots / findings / experiments）
+src/types/series.ts        ProcessedTrack / ProcessedJoint / AngleSeries（步驟 2 輸出，記憶體內、NaN = 缺值）
+src/processing/oneEuro.ts  One Euro Filter 與含缺值序列的平滑（缺口後重設）
+src/processing/derivatives.ts 差分（中央/單側，跨缺口不計算）
+src/processing/angles.ts   三點內角、相對鉛直傾角
+src/processing/side.ts     投籃側（visibility）與面向（鼻子 vs 肩中點）判定
+src/processing/processTrack.ts 步驟 2 主流程：遮罩 → 平滑 → 像素 → 速度/加速度 → 角度序列
+src/ui/SeriesPanel.tsx     原始 vs 平滑曲線、角度曲線（Recharts），點擊跳幀
 src/ui/                    React UI（步驟 1：上傳、進度、品質摘要、逐幀核對）
 docs/PARAMETERS.md         可調參數清單（位置、預設值、用途）
 ```

@@ -1,16 +1,25 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { thresholds } from '../config/thresholds';
 import { JOINT_NAMES, SKELETON_CONNECTIONS } from '../pose/joints';
 import type { PoseTrack } from '../types/pose';
 import { waitForEvent } from '../video/fps';
 
+interface Props {
+  video: HTMLVideoElement;
+  track: PoseTrack;
+  /** 受控的目前幀索引（由 App 持有，與曲線面板共用）。 */
+  index: number;
+  onIndexChange: (index: number) => void;
+}
+
 /**
  * 步驟 1 的驗證用檢視器：把某一幀的影片畫面與該幀儲存的骨架疊在同一張 Canvas。
  * 完整的動態骨架播放器（播放、慢放、軌跡、角度曲線連動）在步驟 5 實作。
  */
-export function FramePreview({ video, track }: { video: HTMLVideoElement; track: PoseTrack }) {
+export function FramePreview({ video, track, index, onIndexChange }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [index, setIndex] = useState(0);
+  const setIndex = (next: number | ((i: number) => number)) =>
+    onIndexChange(typeof next === 'function' ? next(index) : next);
   const total = track.frameCount;
   const minVis = thresholds.quality.minVisibility;
 
@@ -44,7 +53,8 @@ export function FramePreview({ video, track }: { video: HTMLVideoElement; track:
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [total]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total, index, onIndexChange]);
 
   const s = track.series.nose[index];
   const rec = track.frames.find((f) => f.frame === s?.frame);

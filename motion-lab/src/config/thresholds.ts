@@ -64,6 +64,37 @@ export const thresholds = {
     minShotsForConsistency: 3,
   },
 
+  /**
+   * 步驟 2：平滑（One Euro Filter）。在 0..1 正規化座標上濾波，再轉成像素，
+   * 因此參數與影片解析度無關。缺值幀不送進濾波器、也不輸出任何值（不補造）。
+   */
+  smoothing: {
+    /** 最低截止頻率（Hz）。越低越平滑但靜止時延遲越大；姿勢資料常用 1~2。 */
+    minCutoffHz: 1.5,
+    /** 速度係數。越大代表快速移動時越少平滑（降低動作延遲）；0 = 固定截止頻率。 */
+    beta: 0.3,
+    /** 速度估計用的截止頻率（Hz）。 */
+    derivativeCutoffHz: 1.0,
+    /** 連續缺值超過幾幀後濾波器狀態重設（避免用很久以前的位置去拉現在的點）。 */
+    resetAfterGapFrames: 3,
+  },
+
+  /** 步驟 2：速度 / 加速度與角度序列。 */
+  derivatives: {
+    /** 計算差分時，相鄰兩個有效樣本的幀距最多允許幾幀；超過視為跨越缺口，不計算。 */
+    maxGapFrames: 1,
+  },
+
+  /** 步驟 2：投籃側與面向判定。 */
+  side: {
+    /** 投籃手：'auto' 依手腕/手肘平均 visibility 較高的一側；也可強制 'left' / 'right'。 */
+    shootingSide: 'auto' as 'auto' | 'left' | 'right',
+    /** auto 判定時兩側 visibility 差距小於此值視為無法判定（報告列入無法判讀，預設取 right）。 */
+    minSideVisibilityGap: 0.05,
+    /** 面向判定：鼻子 x 相對肩膀中點 x 的偏移需超過肩寬的此比例，該幀才投票。 */
+    facingMinNoseOffsetRatio: 0.1,
+  },
+
   /** 骨架資料品質門檻。 */
   quality: {
     /** 單一關節 visibility 低於此值的幀視為「缺值」，後續不得用來計算（不補造）。 */

@@ -25,6 +25,8 @@ button { background: var(--gold); color: #1a1205; border: 0; border-radius: 8px;
 button.secondary { background: transparent; color: var(--text); border: 1px solid var(--line); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 input[type='file'] { color: var(--muted); }
+select { background: #1d1d27; color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; }
+label { color: var(--muted); font-size: 13px; }
 .meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px 16px; font-size: 13px; }
 .meta b { color: var(--text); font-weight: 600; }
 .meta span { color: var(--muted); }

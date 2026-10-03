@@ -31,4 +31,20 @@
 | `quality.minValidFrameRatio` | `src/config/thresholds.ts` | `0.6` | 關節有效幀比例低於此值 → 該關節「無法判讀」 |
 | `quality.maxUndetectedFrameRatio` | `src/config/thresholds.ts` | `0.3` | 未偵測到人的幀比例高於此值 → 整段視為機位不符 |
 
+## 步驟 2：時間序列與平滑
+
+| 參數 | 檔案位置 | 預設值 | 用途 |
+| --- | --- | --- | --- |
+| `smoothing.minCutoffHz` | `src/config/thresholds.ts` | `1.5` | One Euro 最低截止頻率；越低越平滑、靜止時抖動越少，但延遲越大 |
+| `smoothing.beta` | `src/config/thresholds.ts` | `0.3` | 速度係數；越大快速動作越不被平滑（延遲越小）。在 0..1 正規化座標上運作，與解析度無關 |
+| `smoothing.derivativeCutoffHz` | `src/config/thresholds.ts` | `1.0` | 速度估計的截止頻率 |
+| `smoothing.resetAfterGapFrames` | `src/config/thresholds.ts` | `3` | 連續缺值超過此幀數後濾波器重設，缺口後第一個樣本原樣輸出 |
+| `derivatives.maxGapFrames` | `src/config/thresholds.ts` | `1` | 差分時相鄰有效樣本最多允許的幀距；超過視為缺口不計算 |
+| `side.shootingSide` | `src/config/thresholds.ts` | `'auto'` | 投籃手：auto 取手腕/手肘平均 visibility 高的一側，或強制 left / right |
+| `side.minSideVisibilityGap` | `src/config/thresholds.ts` | `0.05` | auto 時兩側差距小於此值標為「不確定」（報告列入無法判讀） |
+| `side.facingMinNoseOffsetRatio` | `src/config/thresholds.ts` | `0.1` | 面向多數決：鼻子相對肩中點的偏移需超過軀幹尺度的此比例才投票 |
+
+缺值政策（規則 1）：visibility 低於 `quality.minVisibility` 或未偵測的幀，座標、速度、角度一律為缺值（NaN），
+不做任何插補；曲線在缺值處中斷。
+
 非門檻的資產位置（模型、WASM、CDN 備援）在 `src/config/assets.ts`。
