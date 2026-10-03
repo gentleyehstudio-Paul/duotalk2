@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { thresholds } from '../config/thresholds';
 import type { ProcessedTrack } from '../types/series';
 import { PHASE_NAMES, type PhaseName, type SegmentationFailure, type SegmentationResult, type Shot, type ShotIssue } from '../types/shot';
@@ -15,6 +15,7 @@ const PHASE_LABEL: Record<PhaseName, string> = {
 
 const ISSUE_LABEL: Record<ShotIssue, string> = {
   low_valid_ratio: '投籃側手腕/手肘有效幀不足',
+  release_in_gap: 'Release 時刻落在資料缺口內（取缺口後第一幀，時刻不確定）',
   dip_onset_undetermined: '找不到下蹲/下沉起點（Dip 起點 = Dip 底）',
   no_quiet_setup: 'Dip 前沒有安靜的 Setup 段',
   set_point_fallback: 'Set Point 以手腕上升速度最小點替代',
@@ -30,21 +31,27 @@ const FAILURE_LABEL: Record<SegmentationFailure, string> = {
   candidates_rejected: '有手腕高度峰值，但都不符合上升速度／肘伸展條件（可能是舉手而非出手）',
 };
 
+export interface EventLoop {
+  center: number;
+}
+
 interface Props {
   processed: ProcessedTrack;
   result: SegmentationResult;
   frameIndex: number;
   onSeek: (index: number) => void;
+  /** 目前的 ±N 幀循環（由 App 持有，指標面板也會觸發）。 */
+  loop: EventLoop | null;
+  setLoop: (l: EventLoop | null) => void;
 }
 
 /**
  * 步驟 3 檢視：時間軸上標示每球的六個階段，點擊跳幀；
  * Release 等關鍵時刻一律以 ±N 幀循環片段呈現（規則 1），不提供靜態單幀「結論」。
  */
-export function ShotTimeline({ processed, result, frameIndex, onSeek }: Props) {
+export function ShotTimeline({ processed, result, frameIndex, onSeek, loop, setLoop }: Props) {
   const n = processed.frames.length;
   const barRef = useRef<HTMLDivElement>(null);
-  const [loop, setLoop] = useState<{ center: number } | null>(null);
   const N = thresholds.display.eventContextFrames;
 
   // ±N 幀循環播放
@@ -97,6 +104,11 @@ export function ShotTimeline({ processed, result, frameIndex, onSeek }: Props) {
           </span>
         ))}
         <span>目前：{currentPhaseLabel(result.shots, frameIndex)}</span>
+        {loop && (
+          <button className="secondary" onClick={() => setLoop(null)}>
+            停止循環（中心幀 {loop.center}）
+          </button>
+        )}
       </div>
 
       {result.failures.length > 0 && (

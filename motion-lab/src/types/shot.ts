@@ -16,6 +16,7 @@ export interface Phase {
 
 export type ShotIssue =
   | 'low_valid_ratio' // 投籃側手腕/手肘有效幀不足
+  | 'release_in_gap' // 手腕停止上升的時刻落在資料缺口內；Release 取缺口後第一幀，時刻不確定
   | 'dip_onset_undetermined' // 找不到下蹲/下沉起點，Dip 起點 = Dip 底
   | 'no_quiet_setup' // Dip 前沒有安靜段
   | 'set_point_fallback' // 找不到肘屈曲極大，改用手腕上升速度最小點

@@ -16,7 +16,7 @@
 | 1 | 影片載入與逐幀姿態擷取 | ✅ 完成 |
 | 2 | 時間序列與平滑（One Euro Filter、缺值、像素座標、速度/加速度、角度序列、投籃側/面向） | ✅ 完成 |
 | 3 | 投籃與階段切分（Release 事件偵測、六階段、單球/多球、無法判讀原因） | ✅ 完成 |
-| 4 | 指標計算 | ⏳ |
+| 4 | 指標計算（7 項首批指標、Session 彙總、CV、個人基準與偏離） | ✅ 完成 |
 | 5 | 動態骨架播放器 | ⏳ |
 | 6 | 規則引擎與報告 | ⏳ |
 | 7 | Session 比較 | ⏳ |
@@ -62,6 +62,11 @@ src/segmentation/peaks.ts  含缺值序列的峰值與 prominence、最小間隔
 src/segmentation/segmentShots.ts 步驟 3 主流程：手腕高度峰值 → Release 事件 → Dip/Setup/Set Point/Follow-through
 src/testutils/syntheticShot.ts 合成投籃骨架（測試用，含 ground truth）
 src/ui/ShotTimeline.tsx    階段時間軸、每球表格、Release ±N 幀循環片段
+src/types/metrics.ts       MetricValue / ShotMetrics / SessionMetricsSummary / Baseline
+src/metrics/definitions.ts 七個指標的名稱、單位、來源與說明
+src/metrics/computeShotMetrics.ts 每球指標計算（缺值 → null + 原因）
+src/metrics/summary.ts     Session 彙總（平均/SD/CV）、個人基準、偏離
+src/ui/MetricsPanel.tsx    指標表（每球、平均、一致性、基準、偏離；點數值播 ±N 幀）
 src/ui/                    React UI（步驟 1：上傳、進度、品質摘要、逐幀核對）
 docs/PARAMETERS.md         可調參數清單（位置、預設值、用途）
 ```

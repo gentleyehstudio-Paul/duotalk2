@@ -47,7 +47,7 @@ export function segmentShots(p: ProcessedTrack): SegmentationResult {
   const msToFrames = (ms: number) => Math.max(1, Math.round((ms / 1000) * p.fps));
 
   // ── Release 候選：手腕高度峰值 ──
-  const rawPeaks = findPeaks(h, cfg.minReleaseProminenceRatio).filter((pk) => pk.value >= cfg.minReleaseHeightRatio);
+  const rawPeaks = findPeaks(h, cfg.minReleaseProminenceRatio, cfg.maxGapFramesInRise).filter((pk) => pk.value >= cfg.minReleaseHeightRatio);
   if (rawPeaks.length === 0) {
     return { shots: [], failures: ['no_release_candidates'], rejected, wristHeightRatio: h };
   }
@@ -60,6 +60,7 @@ export function segmentShots(p: ProcessedTrack): SegmentationResult {
     maxRise: number;
     elbowAtRel: number;
     prominence: number;
+    releaseInGap: boolean;
   }
   const candidates: Candidate[] = [];
   for (const pk of rawPeaks) {
@@ -71,23 +72,37 @@ export function segmentShots(p: ProcessedTrack): SegmentationResult {
       rejected.push({ index: peakI, reason: `rise speed ${maxRise.toFixed(2)} < ${cfg.minRiseSpeedRatioPerS}` });
       continue;
     }
-    // 上升段到峰值之間不得有資料中斷，否則無法確認這個峰值是由這段上升到達的。
-    let gapInRise = false;
-    for (let k = riseSpeedI; k <= peakI; k++) if (Number.isNaN(h[k]!)) gapInRise = true;
-    if (gapInRise) {
-      rejected.push({ index: peakI, reason: 'data gap between rise and peak' });
+    // 上升段到峰值之間的資料中斷不得超過上限，否則無法確認這個峰值是由這段上升到達的。
+    let longestGap = 0;
+    let run = 0;
+    for (let k = riseSpeedI; k <= peakI; k++) {
+      run = Number.isNaN(h[k]!) ? run + 1 : 0;
+      longestGap = Math.max(longestGap, run);
+    }
+    if (longestGap > cfg.maxGapFramesInRise) {
+      rejected.push({ index: peakI, reason: `data gap of ${longestGap} frames between rise and peak` });
       continue;
     }
     // Release = 從手腕高度峰值往回走，最後一次由「上升」轉為「停止上升」的那一幀。
     // （不能從上升速度峰值往後找第一次停止：Set Point 的短暫停頓也會讓速度降到門檻以下。）
     let rel = peakI;
-    while (rel - 1 > riseSpeedI && upSpeed[rel - 1]! <= cfg.releaseUpSpeedRatioPerS) rel--;
+    let releaseInGap = false;
+    while (rel - 1 > riseSpeedI) {
+      const prev = upSpeed[rel - 1]!;
+      if (Number.isNaN(prev)) {
+        // 停止上升的那一刻落在資料缺口內：Release 時刻不確定，取缺口後第一幀並標記。
+        releaseInGap = true;
+        break;
+      }
+      if (prev > cfg.releaseUpSpeedRatioPerS) break;
+      rel--;
+    }
     const elbowAtRel = nearestValid(elbowFlex.deg, rel, 2);
     if (!Number.isNaN(elbowAtRel) && elbowAtRel > cfg.maxElbowFlexionAtReleaseDeg) {
       rejected.push({ index: rel, reason: `elbow flexion ${elbowAtRel.toFixed(0)}° > ${cfg.maxElbowFlexionAtReleaseDeg}°` });
       continue;
     }
-    candidates.push({ peakI, rel, riseSpeedI, maxRise, elbowAtRel, prominence: pk.prominence });
+    candidates.push({ peakI, rel, riseSpeedI, maxRise, elbowAtRel, prominence: pk.prominence, releaseInGap });
   }
   const byPeak = new Map(candidates.map((c) => [c.peakI, c]));
   const kept = suppressClosePeaks(
@@ -96,10 +111,19 @@ export function segmentShots(p: ProcessedTrack): SegmentationResult {
     cfg.minShotIntervalMs,
   ).map((pk) => byPeak.get(pk.index)!);
 
+  // 安靜判定用「短視窗內的位移範圍」而不是瞬時速度：差分會放大關節抖動，速度門檻在真實資料上不可靠。
+  const quietWin = msToFrames(cfg.setupQuietWindowMs);
   const quietAt = (k: number) => {
-    const ws = wrist.speed[k]! / H;
-    const kv = Math.abs(kneeFlex.vel[k]!);
-    return (Number.isNaN(ws) || ws < cfg.setupQuietWristSpeedRatioPerS) && (Number.isNaN(kv) || kv < cfg.setupQuietKneeVelDegPerS);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, minK = Infinity, maxK = -Infinity;
+    let nW = 0, nK = 0;
+    for (let i = Math.max(0, k - quietWin); i <= k; i++) {
+      const x = wrist.x[i]!, y = wrist.y[i]!, kf = kneeFlex.deg[i]!;
+      if (!Number.isNaN(x) && !Number.isNaN(y)) { nW++; minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+      if (!Number.isNaN(kf)) { nK++; minK = Math.min(minK, kf); maxK = Math.max(maxK, kf); }
+    }
+    const wristQuiet = nW === 0 || Math.max(maxX - minX, maxY - minY) / H < cfg.setupQuietWristRangeRatio;
+    const kneeQuiet = nK === 0 || maxK - minK < cfg.setupQuietKneeRangeDeg;
+    return wristQuiet && kneeQuiet;
   };
 
   const shots: Shot[] = [];
@@ -108,6 +132,7 @@ export function segmentShots(p: ProcessedTrack): SegmentationResult {
     const { rel, maxRise, elbowAtRel } = c;
     if (rel <= prevEnd) continue;
     const issues: ShotIssue[] = [];
+    if (c.releaseInGap) issues.push('release_in_gap');
 
     // ── Dip 底：視窗內手腕最低 ──
     const dipFrom = Math.max(prevEnd + 1, rel - msToFrames(cfg.dipSearchWindowMs));

@@ -1,10 +1,12 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
+import type { ShotMetrics } from '../types/metrics';
 import type { PoseTrack } from '../types/pose';
+import type { Shot } from '../types/shot';
 
 /**
  * IndexedDB：只存骨架與指標 JSON，不存原始影片。
  * 資料模型：Session → Shot → Phase → Metrics；另有 Finding 與 Experiment。
- * 步驟 1 先建立 sessions（含 PoseTrack）；shots / findings / experiments 的欄位會在後續步驟補齊。
+ * sessions 存 PoseTrack；shots 存每球的事件/階段與指標（供個人基準）；findings / experiments 於步驟 6 補齊。
  */
 export interface SessionRecord {
   id: string;
@@ -17,8 +19,10 @@ export interface ShotRecord {
   id: string;
   sessionId: string;
   index: number;
-  startFrame: number;
-  endFrame: number;
+  createdAt: string;
+  /** 事件與階段（ProcessedTrack 索引）。 */
+  shot: Shot;
+  metrics: ShotMetrics;
 }
 
 export interface FindingRecord {
@@ -71,11 +75,32 @@ export function newId(prefix: string): string {
   return `${prefix}_${rnd}`;
 }
 
-export async function saveSession(name: string, track: PoseTrack): Promise<SessionRecord> {
+export async function saveSession(
+  name: string,
+  track: PoseTrack,
+  shots: Array<{ shot: Shot; metrics: ShotMetrics }> = [],
+): Promise<SessionRecord> {
   const db = await getDB();
-  const record: SessionRecord = { id: newId('sess'), name, createdAt: new Date().toISOString(), track };
-  await db.put('sessions', record);
+  const createdAt = new Date().toISOString();
+  const record: SessionRecord = { id: newId('sess'), name, createdAt, track };
+  const tx = db.transaction(['sessions', 'shots'], 'readwrite');
+  await tx.objectStore('sessions').put(record);
+  for (const s of shots) {
+    await tx.objectStore('shots').put({ id: newId('shot'), sessionId: record.id, index: s.shot.index, createdAt, shot: s.shot, metrics: s.metrics });
+  }
+  await tx.done;
   return record;
+}
+
+/** 所有已儲存的球（供個人基準）。 */
+export async function listAllShots(): Promise<ShotRecord[]> {
+  const db = await getDB();
+  return db.getAll('shots');
+}
+
+export async function listShotsOfSession(sessionId: string): Promise<ShotRecord[]> {
+  const db = await getDB();
+  return db.getAllFromIndex('shots', 'bySession', sessionId);
 }
 
 export async function listSessions(): Promise<Array<Omit<SessionRecord, 'track'> & { frameCount: number; fileName: string }>> {
@@ -93,5 +118,9 @@ export async function getSession(id: string): Promise<SessionRecord | undefined>
 
 export async function deleteSession(id: string): Promise<void> {
   const db = await getDB();
-  await db.delete('sessions', id);
+  const tx = db.transaction(['sessions', 'shots', 'findings'], 'readwrite');
+  await tx.objectStore('sessions').delete(id);
+  for (const key of await tx.objectStore('shots').index('bySession').getAllKeys(id)) await tx.objectStore('shots').delete(key);
+  for (const key of await tx.objectStore('findings').index('bySession').getAllKeys(id)) await tx.objectStore('findings').delete(key);
+  await tx.done;
 }

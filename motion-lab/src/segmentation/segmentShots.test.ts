@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { thresholds } from '../config/thresholds';
 import { processTrack } from '../processing/processTrack';
 import { buildSyntheticShotTrack, DEFAULT_SCRIPT, truthFor, type ShotScript } from '../testutils/syntheticShot';
 import { PHASE_NAMES } from '../types/shot';
@@ -80,6 +81,17 @@ describe('segmentShots — degenerate inputs', () => {
     const r = segmentShots(p);
     expect(r.shots).toEqual([]);
     expect(r.failures).toContain('no_release_candidates');
+  });
+
+  it('tolerates a short gap in the rise but rejects a long one', () => {
+    const script: ShotScript = { startS: 0.5, ...DEFAULT_SCRIPT };
+    const sp = frameOf(truthFor(script).setPointS);
+    const short = Array.from({ length: thresholds.segmentation.maxGapFramesInRise }, (_, k) => sp - 1 + k);
+    const long = Array.from({ length: thresholds.segmentation.maxGapFramesInRise + 3 }, (_, k) => sp - 1 + k);
+    expect(segmentShots(processTrack(buildSyntheticShotTrack([script], 4, FPS, short))).shots.length).toBe(1);
+    const r = segmentShots(processTrack(buildSyntheticShotTrack([script], 4, FPS, long)));
+    expect(r.shots.length).toBe(0);
+    expect(r.failures.length).toBeGreaterThan(0);
   });
 
   it('flags a shot whose data is missing around the release', () => {

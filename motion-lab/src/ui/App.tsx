@@ -3,7 +3,12 @@ import { thresholds } from '../config/thresholds';
 import { extractPoseTrack, summarizeQuality, type ExtractionProgress } from '../pose/extractPoseTrack';
 import { processTrack } from '../processing/processTrack';
 import { segmentShots } from '../segmentation/segmentShots';
-import { ShotTimeline } from './ShotTimeline';
+import { computeShotMetrics } from '../metrics/computeShotMetrics';
+import { computeBaseline, summarizeSession } from '../metrics/summary';
+import { listAllShots } from '../storage/db';
+import type { Baseline } from '../types/metrics';
+import { MetricsPanel } from './MetricsPanel';
+import { ShotTimeline, type EventLoop } from './ShotTimeline';
 import { deleteSession, getSession, listSessions, saveSession } from '../storage/db';
 import type { JointQuality, PoseTrack } from '../types/pose';
 import { loadVideoFile, type LoadedVideo } from '../video/loadVideo';
@@ -27,7 +32,23 @@ export function App() {
   const processed = useMemo(() => (track ? processTrack(track) : null), [track]);
   // 步驟 3：由時間序列事件切出每一球與六個階段。
   const segmentation = useMemo(() => (processed ? segmentShots(processed) : null), [processed]);
-  useEffect(() => setFrameIndex(0), [track]);
+  // 步驟 4：每球七個指標、Session 彙總、個人基準（先前已儲存的球）。
+  const shotMetrics = useMemo(
+    () => (processed && segmentation ? segmentation.shots.map((s) => computeShotMetrics(processed, s)) : []),
+    [processed, segmentation],
+  );
+  const summary = useMemo(() => summarizeSession(shotMetrics), [shotMetrics]);
+  const [baseline, setBaseline] = useState<Baseline | null>(null);
+  const [eventLoop, setEventLoop] = useState<EventLoop | null>(null);
+  useEffect(() => {
+    listAllShots()
+      .then((rows) => setBaseline(computeBaseline(rows.map((r) => ({ sessionId: r.sessionId, metrics: r.metrics })), savedId ?? undefined)))
+      .catch(() => setBaseline(null));
+  }, [savedId, sessions]);
+  useEffect(() => {
+    setFrameIndex(0);
+    setEventLoop(null);
+  }, [track]);
 
   const refreshSessions = useCallback(() => {
     listSessions().then(setSessions).catch(() => setSessions([]));
@@ -73,7 +94,11 @@ export function App() {
 
   const save = async () => {
     if (!track) return;
-    const rec = await saveSession(track.video.fileName.replace(/\.[^.]+$/, ''), track);
+    const rec = await saveSession(
+      track.video.fileName.replace(/\.[^.]+$/, ''),
+      track,
+      (segmentation?.shots ?? []).map((shot, i) => ({ shot, metrics: shotMetrics[i]! })),
+    );
     setSavedId(rec.id);
     refreshSessions();
   };
@@ -121,7 +146,7 @@ export function App() {
     <div className="app">
       <header className="top">
         <h1>MOTION LAB</h1>
-        <span className="sub">Form Shooting · 步驟 1–3：逐幀姿態擷取 → 時間序列與平滑 → 投籃與階段切分</span>
+        <span className="sub">Form Shooting · 步驟 1–4：逐幀姿態擷取 → 時間序列 → 階段切分 → 指標</span>
       </header>
 
       <section className="panel">
@@ -238,14 +263,28 @@ export function App() {
               <h2>
                 5. 投籃與階段切分（{segmentation.shots.length} 球 · 身高尺度 {Number.isNaN(processed.bodyHeightPx) ? '無法估計' : `${processed.bodyHeightPx.toFixed(0)} px / ${processed.bodyHeightSource}`}）
               </h2>
-              <ShotTimeline processed={processed} result={segmentation} frameIndex={frameIndex} onSeek={setFrameIndex} />
+              <ShotTimeline
+                processed={processed}
+                result={segmentation}
+                frameIndex={frameIndex}
+                onSeek={setFrameIndex}
+                loop={eventLoop}
+                setLoop={setEventLoop}
+              />
+            </section>
+          )}
+
+          {segmentation && segmentation.shots.length > 0 && (
+            <section className="panel">
+              <h2>6. 指標（每球 × 7 項 · 不打總分）</h2>
+              <MetricsPanel shots={shotMetrics} summary={summary} baseline={baseline} onShowEvent={(i) => setEventLoop({ center: i })} />
             </section>
           )}
 
           {processed && (
             <section className="panel">
               <h2>
-                6. 時間序列與平滑（One Euro：minCutoff {thresholds.smoothing.minCutoffHz} Hz · β {thresholds.smoothing.beta}
+                7. 時間序列與平滑（One Euro：minCutoff {thresholds.smoothing.minCutoffHz} Hz · β {thresholds.smoothing.beta}
                 ）· 點擊曲線跳到該幀
               </h2>
               <div className="meta" style={{ marginBottom: 8 }}>

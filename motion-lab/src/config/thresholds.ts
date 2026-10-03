@@ -69,8 +69,12 @@ export const thresholds = {
    * 因此參數與影片解析度無關。缺值幀不送進濾波器、也不輸出任何值（不補造）。
    */
   smoothing: {
-    /** 最低截止頻率（Hz）。越低越平滑但靜止時延遲越大；姿勢資料常用 1~2。 */
-    minCutoffHz: 1.5,
+    /**
+     * 最低截止頻率（Hz）。越低越平滑但快速動作的峰值會被削弱、時間點會延後。
+     * 開發期量測（合成 0.3 s 下蹲、30 fps、2 px 抖動）：1.5 Hz → 膝最大屈曲少 8°、靜止抖動 0.5°；
+     * 3 Hz → 少 4.5°、抖動 0.7°；5 Hz → 少 3.4°、抖動 0.9°。預設取 3 作為平衡點。
+     */
+    minCutoffHz: 3,
     /** 速度係數。越大代表快速移動時越少平滑（降低動作延遲）；0 = 固定截止頻率。 */
     beta: 0.3,
     /** 速度估計用的截止頻率（Hz）。 */
@@ -117,7 +121,9 @@ export const thresholds = {
     riseWindowMs: 1500,
     /** 上升段手腕向上速度峰值至少幾個身高比/秒。 */
     minRiseSpeedRatioPerS: 0.5,
-    /** Release 時刻 = 上升速度峰值之後，手腕向上速度第一次降到此值（身高比/秒）以下的那一幀。 */
+    /** 上升段到手腕高度峰值之間允許的最長連續缺值幀數；超過則無法確認峰值是由這段上升到達，候選否決。 */
+    maxGapFramesInRise: 5,
+    /** Release 時刻 = 從手腕高度峰值往回找，最後一次由上升（速度 > 此值，身高比/秒）轉為停止的那一幀。 */
     releaseUpSpeedRatioPerS: 0.15,
     /** Release 時肘屈曲量不得大於此值（度；0 = 完全伸直）。 */
     maxElbowFlexionAtReleaseDeg: 50,
@@ -131,10 +137,12 @@ export const thresholds = {
     dipOnsetBacktrackMaxMs: 300,
     /** Setup 往前最多延伸幾毫秒。 */
     setupMaxMs: 1000,
-    /** Setup 安靜判定：手腕速率低於此身高比/秒。 */
-    setupQuietWristSpeedRatioPerS: 0.15,
-    /** Setup 安靜判定：膝角速度絕對值低於此度/秒。 */
-    setupQuietKneeVelDegPerS: 20,
+    /** Setup 安靜判定的回看視窗（毫秒）：在這段時間內手腕與膝的「位移範圍」都很小才算安靜。 */
+    setupQuietWindowMs: 150,
+    /** Setup 安靜判定：視窗內手腕 x 或 y 的範圍（最大−最小）低於此身高比。 */
+    setupQuietWristRangeRatio: 0.02,
+    /** Setup 安靜判定：視窗內膝屈曲範圍低於此度數。 */
+    setupQuietKneeRangeDeg: 6,
     /** Set Point：Release 前最後一次肘屈曲局部極大，且屈曲量至少此度數。 */
     minSetPointElbowFlexionDeg: 45,
     /** Set Point 必須比 Release 早至少幾毫秒。 */
@@ -147,6 +155,26 @@ export const thresholds = {
     followThroughMaxMs: 1500,
     /** 一球範圍內投籃側手腕與手肘的有效幀比例低於此值 → 該球標為無法判讀。 */
     minValidRatioInShot: 0.7,
+  },
+
+  /** 步驟 4：指標計算與個人基準。 */
+  metrics: {
+    /** 區間型指標（如膝最大屈曲）要求區間內有效幀比例至少此值，否則該指標標為無法判讀。 */
+    minWindowValidRatio: 0.7,
+    /** 事件型指標（如 Set Point 肘屈曲）允許在事件幀前後最多幾幀內取最近的有效值。 */
+    eventValueSearchFrames: 2,
+    /** 地面參考：以該球 Setup 區間內較低腳踝 y 的中位數當地面；Setup 太短時改用整段影片。 */
+    groundMinSetupFrames: 3,
+  },
+  baseline: {
+    /** 形成個人基準至少需要幾球（跨先前 Session 累計）。 */
+    minShots: 5,
+    /** 偏離幅度以「標準差倍數」表示時，基準標準差至少需要多少（避免除以接近 0 的 sd）；以各指標單位計。 */
+    minBaselineSd: {
+      deg: 1,
+      ms: 10,
+      ratio: 0.01,
+    } as Record<'deg' | 'ms' | 'ratio', number>,
   },
 
   /** 顯示相關（規則 1：關鍵時刻一律附帶前後 ±N 幀的動態片段）。 */

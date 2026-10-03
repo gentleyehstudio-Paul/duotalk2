@@ -10,7 +10,10 @@ export interface Peak {
   rightBase: number;
 }
 
-export function findPeaks(v: readonly number[], minProminence: number): Peak[] {
+/**
+ * @param bridgeGapFrames 搜尋基底時可跨越的最長連續缺值幀數（短缺口不應讓峰值失去它真正的谷底）；0 = 缺值即邊界。
+ */
+export function findPeaks(v: readonly number[], minProminence: number, bridgeGapFrames = 0): Peak[] {
   const n = v.length;
   const out: Peak[] = [];
   const valid = (i: number) => i >= 0 && i < n && !Number.isNaN(v[i]!);
@@ -27,7 +30,12 @@ export function findPeaks(v: readonly number[], minProminence: number): Peak[] {
     let leftMin = v[i]!;
     let leftBase = i;
     let leftHas = false;
-    for (let k = i - 1; valid(k); k--) {
+    for (let k = i - 1, gap = 0; k >= 0; k--) {
+      if (!valid(k)) {
+        if (++gap > bridgeGapFrames) break;
+        continue;
+      }
+      gap = 0;
       if (v[k]! > v[i]!) break;
       leftHas = true;
       if (v[k]! < leftMin) {
@@ -38,7 +46,12 @@ export function findPeaks(v: readonly number[], minProminence: number): Peak[] {
     let rightMin = v[i]!;
     let rightBase = i;
     let rightHas = false;
-    for (let k = i + 1; valid(k); k++) {
+    for (let k = i + 1, gap = 0; k < n; k++) {
+      if (!valid(k)) {
+        if (++gap > bridgeGapFrames) break;
+        continue;
+      }
+      gap = 0;
       if (v[k]! > v[i]!) break;
       rightHas = true;
       if (v[k]! < rightMin) {
