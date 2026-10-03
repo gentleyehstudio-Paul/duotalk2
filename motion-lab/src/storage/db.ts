@@ -1,5 +1,5 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { ShotMetrics } from '../types/metrics';
+import type { MetricId, ShotMetrics } from '../types/metrics';
 import type { PoseTrack } from '../types/pose';
 import type { Shot } from '../types/shot';
 
@@ -25,19 +25,29 @@ export interface ShotRecord {
   metrics: ShotMetrics;
 }
 
+/** Finding：某個 Session 觸發的規則與當時的數值。 */
 export interface FindingRecord {
   id: string;
   sessionId: string;
   ruleId: string;
+  metric: MetricId;
   createdAt: string;
-  payload: unknown;
+  values: { current: number | null; n: number; baseline: number | null; diff: number | null; z: number | null; cv: number | null };
 }
 
+/** Experiment：使用者決定嘗試的 Cue，與之後的 Retest 結果。 */
 export interface ExperimentRecord {
   id: string;
+  ruleId: string;
+  metric: MetricId;
   cue: string;
+  drill: string;
+  target: string;
   startedAt: string;
-  retest?: unknown;
+  /** 開始實驗時該指標的本次平均。 */
+  startValue: number | null;
+  startSessionId: string | null;
+  retest: { sessionId: string | null; recordedAt: string; value: number; delta: number | null } | null;
 }
 
 interface MotionLabDB extends DBSchema {
@@ -79,17 +89,42 @@ export async function saveSession(
   name: string,
   track: PoseTrack,
   shots: Array<{ shot: Shot; metrics: ShotMetrics }> = [],
+  findings: Array<Omit<FindingRecord, 'id' | 'sessionId' | 'createdAt'>> = [],
 ): Promise<SessionRecord> {
   const db = await getDB();
   const createdAt = new Date().toISOString();
   const record: SessionRecord = { id: newId('sess'), name, createdAt, track };
-  const tx = db.transaction(['sessions', 'shots'], 'readwrite');
+  const tx = db.transaction(['sessions', 'shots', 'findings'], 'readwrite');
   await tx.objectStore('sessions').put(record);
   for (const s of shots) {
     await tx.objectStore('shots').put({ id: newId('shot'), sessionId: record.id, index: s.shot.index, createdAt, shot: s.shot, metrics: s.metrics });
   }
+  for (const f of findings) {
+    await tx.objectStore('findings').put({ id: newId('find'), sessionId: record.id, createdAt, ...f });
+  }
   await tx.done;
   return record;
+}
+
+export async function listExperiments(): Promise<ExperimentRecord[]> {
+  const db = await getDB();
+  return (await db.getAllFromIndex('experiments', 'byStartedAt')).reverse();
+}
+
+export async function startExperiment(e: Omit<ExperimentRecord, 'id' | 'startedAt' | 'retest'>): Promise<ExperimentRecord> {
+  const db = await getDB();
+  const rec: ExperimentRecord = { ...e, id: newId('exp'), startedAt: new Date().toISOString(), retest: null };
+  await db.put('experiments', rec);
+  return rec;
+}
+
+export async function recordRetest(id: string, value: number, sessionId: string | null): Promise<ExperimentRecord | undefined> {
+  const db = await getDB();
+  const rec = await db.get('experiments', id);
+  if (!rec) return undefined;
+  rec.retest = { sessionId, recordedAt: new Date().toISOString(), value, delta: rec.startValue === null ? null : value - rec.startValue };
+  await db.put('experiments', rec);
+  return rec;
 }
 
 /** 所有已儲存的球（供個人基準）。 */

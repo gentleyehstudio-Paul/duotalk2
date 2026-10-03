@@ -49,6 +49,13 @@ table.quality th { color: var(--muted); font-weight: 600; }
 table.metrics td, table.metrics th { vertical-align: top; white-space: nowrap; }
 table.metrics td:first-child { white-space: normal; min-width: 120px; }
 button.link { background: none; color: var(--text); border: 0; padding: 0; text-decoration: underline dotted; font-weight: 500; }
+.report h3 { font-size: 14px; margin: 14px 0 6px; color: var(--gold); letter-spacing: 0.04em; }
+.report ol.recs { padding-left: 20px; }
+.report ol.recs li { margin-bottom: 12px; line-height: 1.6; }
+.report ol.recs li b { display: inline-block; min-width: 90px; color: var(--muted); font-weight: 600; }
+.report ul.unreadable { padding-left: 0; list-style: none; }
+.report ul.unreadable li { padding: 4px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.report .tag { margin-right: 6px; }
 .controls { margin-top: 6px; }
 .controls .seg { display: inline-flex; gap: 4px; }
 .controls .seg button { padding: 6px 10px; }

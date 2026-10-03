@@ -96,6 +96,19 @@
 Set Point = Release 前最後一次肘屈曲局部極大 → Release；Release = 上升速度峰值後手腕停止上升的那一幀；
 Follow-through = Release → 手腕下降或手臂收回。
 
+## 步驟 6：規則引擎與報告
+
+| 參數 | 檔案位置 | 預設值 | 用途 |
+| --- | --- | --- | --- |
+| `report.maxRecommendations` | `src/config/thresholds.ts` | `2` | 建議（Observation → Cue → Drill → Retest）數量上限 |
+| `report.minHighlights` / `maxHighlights` | `src/config/thresholds.ts` | `3` / `5` | 重點整理條數範圍 |
+| `report.forbiddenTerms` | `src/config/thresholds.ts` | 分數、總分、評分、等級… | 報告與規則文字禁用詞；出現即視為錯誤（規則 3） |
+| 規則本體 | `rules/rules.yaml` | 10 條 | 每條：`metric`、`priority`、`when`（`baseline` zThreshold / `absolute` value / `consistency` cvAbove，各含 `minShots`）、observation / cue / drill / retest 文字 |
+
+`rules.yaml` 內目前的數值門檻：baseline 規則 zThreshold 皆為 `1.0` SD；`release_height_inconsistent` cvAbove `0.05`（需 3 球）；
+`elbow_extends_before_knee` value `0` ms；`trunk_leans_back` value `-5°`；`follow_through_short` value `300` ms。
+修改 yaml 後重新建置（`npm run build` 或 dev 自動重載）即生效；格式錯誤會在報告區顯示錯誤而不是靜默略過。
+
 ## 步驟 5：動態骨架播放器
 
 | 參數 | 檔案位置 | 預設值 | 用途 |

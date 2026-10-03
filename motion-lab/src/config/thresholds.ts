@@ -177,6 +177,17 @@ export const thresholds = {
     } as Record<'deg' | 'ms' | 'ratio', number>,
   },
 
+  /** 步驟 6：報告結構（規則內容在 rules/rules.yaml）。 */
+  report: {
+    /** 建議（Observation → Cue → Drill → Retest）數量上限。 */
+    maxRecommendations: 2,
+    /** 重點整理條數範圍；可讀指標少於下限時列出所有可讀者並在無法判讀中說明。 */
+    minHighlights: 3,
+    maxHighlights: 5,
+    /** 報告與規則文字中禁止出現的詞（規則 3：不打總分、不做好壞判定）；出現即視為錯誤。 */
+    forbiddenTerms: ['分數', '總分', '評分', '等級', '評等', '優良', '不良', '很好', '很差', '太差', '錯誤姿勢', 'score', 'grade', 'rating'] as readonly string[],
+  },
+
   /** 顯示相關（規則 1：關鍵時刻一律附帶前後 ±N 幀的動態片段）。 */
   display: {
     /** 顯示 Release 等關鍵時刻時，前後各帶幾幀一起循環播放。 */

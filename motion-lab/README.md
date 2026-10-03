@@ -18,7 +18,7 @@
 | 3 | 投籃與階段切分（Release 事件偵測、六階段、單球/多球、無法判讀原因） | ✅ 完成 |
 | 4 | 指標計算（7 項首批指標、Session 彙總、CV、個人基準與偏離） | ✅ 完成 |
 | 5 | 動態骨架播放器（逐幀同步、慢放、軌跡、階段時間軸、角度曲線連動） | ✅ 完成 |
-| 6 | 規則引擎與報告 | ⏳ |
+| 6 | 規則引擎與報告（rules.yaml、重點整理、最多 2 條建議、無法判讀、Finding / Experiment / Retest） | ✅ 完成 |
 | 7 | Session 比較 | ⏳ |
 
 產品決定：**一段影片投一球即可分析**（`thresholds.shots.minShotsPerSession = 1`）。多球影片仍會自動切分每一球；
@@ -72,6 +72,11 @@ src/ui/player/usePlayback.ts 播放邏輯：影片 rVFC 逐幀同步 / 無影片
 src/ui/player/drawSkeleton.ts 骨架與軌跡尾跡繪製、mediaTime → 幀索引
 src/ui/player/AngleCurves.tsx 膝/髖/肘/肩四張小圖，階段色帶 + Release 線，點擊跳幀
 src/ui/player/CursorOverlay.tsx 不重繪圖表的 DOM 時間游標
+rules/rules.yaml           建議規則（條件 + Observation / Cue / Drill / Retest 文字）
+src/rules/loadRules.ts     YAML 解析與驗證（未知指標、缺欄位、禁用詞 → 直接報錯）
+src/rules/engine.ts        規則評估、報告組裝（重點整理 / 建議 / 無法判讀）、Markdown 輸出、禁用詞守門
+src/types/report.ts        Rule / RuleEvaluation / Recommendation / Highlight / Report
+src/ui/ReportPanel.tsx     報告面板、開始實驗、記錄 Retest、規則評估明細
 src/ui/                    React UI（步驟 1：上傳、進度、品質摘要、逐幀核對）
 docs/PARAMETERS.md         可調參數清單（位置、預設值、用途）
 ```

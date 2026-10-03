@@ -1,0 +1,132 @@
+# MOTION LAB — 建議規則（規則 3）
+# 每條規則：條件不成立就不輸出。建議最多輸出 thresholds.report.maxRecommendations 條，依 priority（小者優先）再依偏離幅度排序。
+# 文字中禁止出現分數、等級、好壞判定（見 thresholds.report.forbiddenTerms）。
+#
+# when.compare:
+#   baseline    — 與個人基準比較；zThreshold 為標準差倍數，direction 為 below / above / either。
+#                 需要基準存在（先前已儲存 ≥ baseline.minShots 球）且基準 SD 足夠（否則不成立）。
+#   absolute    — 與固定值比較；value 為指標單位，direction 為 below / above。
+#   consistency — 本次一致性；cvAbove 為 CV 門檻，需 ≥ shots.minShotsForConsistency 球。
+# minShots：本次該指標至少幾個可讀球才評估。
+# 文字樣板可用 {current} {baseline} {diff} {z} {cv} {n} {value}。
+version: 1
+rules:
+  - id: knee_flexion_below_baseline
+    metric: knee_max_flexion_deg
+    priority: 10
+    when: { compare: baseline, direction: below, zThreshold: 1.0, minShots: 1 }
+    observation: '膝最大屈曲 {current}，比個人基準 {baseline} 少 {diff}（{z} SD）。'
+    cue: '下蹲時想著「坐到椅子邊緣」，讓膝蓋多彎一點再啟動。'
+    drill: '10 球 form shooting，距離 2 公尺，每球在 Dip 底停 1 秒再出手。'
+    retest:
+      metric: knee_max_flexion_deg
+      target: '回到個人基準 ±0.5 SD 內'
+      method: '同機位錄 10 球，比較膝最大屈曲平均。'
+
+  - id: knee_flexion_above_baseline
+    metric: knee_max_flexion_deg
+    priority: 20
+    when: { compare: baseline, direction: above, zThreshold: 1.0, minShots: 1 }
+    observation: '膝最大屈曲 {current}，比個人基準 {baseline} 多 {diff}（{z} SD）。'
+    cue: '下蹲到「腳跟仍有壓力」的位置就啟動，不再往下。'
+    drill: '10 球 form shooting，鏡子或同伴口頭提示 Dip 底的位置。'
+    retest:
+      metric: knee_max_flexion_deg
+      target: '回到個人基準 ±0.5 SD 內'
+      method: '同機位錄 10 球，比較膝最大屈曲平均。'
+
+  - id: set_point_elbow_deviates
+    metric: elbow_flexion_at_set_point_deg
+    priority: 15
+    when: { compare: baseline, direction: either, zThreshold: 1.0, minShots: 1 }
+    observation: 'Set Point 肘屈曲 {current}，與個人基準 {baseline} 相差 {diff}（{z} SD）。'
+    cue: '舉球到 Set Point 時把手肘想成「放在球的正下方」，先停住再伸。'
+    drill: '牆邊 Set Point 停留練習 20 次，每次停 2 秒；再接 10 球近距離出手。'
+    retest:
+      metric: elbow_flexion_at_set_point_deg
+      target: '回到個人基準 ±0.5 SD 內'
+      method: '同機位錄 10 球，比較 Set Point 肘屈曲平均。'
+
+  - id: release_height_below_baseline
+    metric: release_height_ratio
+    priority: 12
+    when: { compare: baseline, direction: below, zThreshold: 1.0, minShots: 1 }
+    observation: '出手高度 {current} 倍身高，比個人基準 {baseline} 低 {diff}（{z} SD）。'
+    cue: '出手時想著「把球放到天花板上」，手肘完全伸直再放手。'
+    drill: '近距離 10 球，每球 Follow-through 停到球進框後才放下。'
+    retest:
+      metric: release_height_ratio
+      target: '回到個人基準 ±0.5 SD 內'
+      method: '同機位錄 10 球，比較出手高度平均。'
+
+  - id: release_height_inconsistent
+    metric: release_height_ratio
+    priority: 14
+    when: { compare: consistency, cvAbove: 0.05, minShots: 3 }
+    observation: '出手高度的一致性 CV {cv}，{n} 球之間變化較大。'
+    cue: '固定 Set Point 的位置（例如眉毛高度），每球從同一點啟動伸展。'
+    drill: '10 球 form shooting，每球先停在 Set Point 1 秒再出手。'
+    retest:
+      metric: release_height_ratio
+      target: 'CV 降到 0.05 以下'
+      method: '同機位錄 10 球，比較出手高度 CV。'
+
+  - id: dip_to_release_slow_vs_baseline
+    metric: dip_to_release_ms
+    priority: 18
+    when: { compare: baseline, direction: above, zThreshold: 1.0, minShots: 1 }
+    observation: 'Dip → Release {current}，比個人基準 {baseline} 長 {diff}（{z} SD）。'
+    cue: '從 Dip 底開始「一個動作」直接上去，不在中途停頓。'
+    drill: '節拍器 10 球：Dip 底到出手固定 2 拍。'
+    retest:
+      metric: dip_to_release_ms
+      target: '回到個人基準 ±0.5 SD 內'
+      method: '同機位錄 10 球，比較 Dip → Release 平均。'
+
+  - id: elbow_extends_before_knee
+    metric: knee_elbow_extension_lag_ms
+    priority: 11
+    when: { compare: absolute, direction: below, value: 0, minShots: 1 }
+    observation: '肘比膝早 {value} 開始伸展（膝→肘時間差 {current}）。'
+    cue: '先讓腿「推」，手等腿到頂才伸。'
+    drill: '坐椅出手 10 球（只用上肢），再站立出手 10 球感受腿先手後。'
+    retest:
+      metric: knee_elbow_extension_lag_ms
+      target: '時間差 ≥ 0 ms'
+      method: '同機位錄 10 球，比較膝→肘時間差。'
+
+  - id: trunk_leans_back
+    metric: trunk_lean_at_release_deg
+    priority: 16
+    when: { compare: absolute, direction: below, value: -5, minShots: 1 }
+    observation: 'Release 時軀幹後仰 {value}（前傾角 {current}）。'
+    cue: '出手時鼻子保持在腳尖上方。'
+    drill: '面牆 30 公分出手 10 球，身體不碰牆。'
+    retest:
+      metric: trunk_lean_at_release_deg
+      target: '前傾角 ≥ -5°'
+      method: '同機位錄 10 球，比較 Release 時前傾角平均。'
+
+  - id: follow_through_short
+    metric: follow_through_hold_ms
+    priority: 13
+    when: { compare: absolute, direction: below, value: 300, minShots: 1 }
+    observation: 'Follow-through 停留 {current}，短於 {value}。'
+    cue: '出手後手指「指著籃框」數到一。'
+    drill: '10 球，每球 Follow-through 停到球落地。'
+    retest:
+      metric: follow_through_hold_ms
+      target: '停留 ≥ 300 ms'
+      method: '同機位錄 10 球，比較 Follow-through 停留平均。'
+
+  - id: follow_through_shorter_than_baseline
+    metric: follow_through_hold_ms
+    priority: 17
+    when: { compare: baseline, direction: below, zThreshold: 1.0, minShots: 1 }
+    observation: 'Follow-through 停留 {current}，比個人基準 {baseline} 短 {diff}（{z} SD）。'
+    cue: '出手後手指「指著籃框」數到一。'
+    drill: '10 球，每球 Follow-through 停到球落地。'
+    retest:
+      metric: follow_through_hold_ms
+      target: '回到個人基準 ±0.5 SD 內'
+      method: '同機位錄 10 球，比較 Follow-through 停留平均。'

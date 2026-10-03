@@ -9,7 +9,11 @@ import { listAllShots } from '../storage/db';
 import type { Baseline } from '../types/metrics';
 import { MetricsPanel } from './MetricsPanel';
 import type { EventLoop } from './ShotTimeline';
-import { deleteSession, getSession, listSessions, saveSession } from '../storage/db';
+import { deleteSession, getSession, listExperiments, listSessions, recordRetest, saveSession, startExperiment, type ExperimentRecord } from '../storage/db';
+import { buildReport } from '../rules/engine';
+import { getRules } from '../rules/rulesSource';
+import type { Recommendation, Report } from '../types/report';
+import { ReportPanel } from './ReportPanel';
 import type { JointQuality, PoseTrack } from '../types/pose';
 import { loadVideoFile, type LoadedVideo } from '../video/loadVideo';
 import { Player } from './player/Player';
@@ -40,11 +44,48 @@ export function App() {
   const summary = useMemo(() => summarizeSession(shotMetrics), [shotMetrics]);
   const [baseline, setBaseline] = useState<Baseline | null>(null);
   const [eventLoop, setEventLoop] = useState<EventLoop | null>(null);
+  const [priorShotCount, setPriorShotCount] = useState(0);
+  const [experiments, setExperiments] = useState<ExperimentRecord[]>([]);
   useEffect(() => {
     listAllShots()
-      .then((rows) => setBaseline(computeBaseline(rows.map((r) => ({ sessionId: r.sessionId, metrics: r.metrics })), savedId ?? undefined)))
+      .then((rows) => {
+        const prior = rows.filter((r) => r.sessionId !== savedId);
+        setPriorShotCount(prior.length);
+        setBaseline(computeBaseline(rows.map((r) => ({ sessionId: r.sessionId, metrics: r.metrics })), savedId ?? undefined));
+      })
       .catch(() => setBaseline(null));
+    listExperiments().then(setExperiments).catch(() => setExperiments([]));
   }, [savedId, sessions]);
+
+  // 步驟 6：規則引擎 → 報告（規則檔有誤時顯示錯誤而不是靜默略過）。
+  const [report, reportError] = useMemo<[Report | null, string | null]>(() => {
+    if (!processed || !segmentation) return [null, null];
+    try {
+      return [buildReport({ rules: getRules(), processed, segmentation, shotMetrics, summary, baseline, priorShotCount }), null];
+    } catch (err) {
+      return [null, (err as Error).message];
+    }
+  }, [processed, segmentation, shotMetrics, summary, baseline, priorShotCount]);
+
+  const sessionName = track ? track.video.fileName.replace(/\.[^.]+$/, '') : '';
+  const onStartExperiment = async (rec: Recommendation) => {
+    await startExperiment({
+      ruleId: rec.ruleId,
+      metric: rec.metric,
+      cue: rec.cue,
+      drill: rec.drill,
+      target: rec.retest.target,
+      startValue: rec.values.current,
+      startSessionId: savedId,
+    });
+    setExperiments(await listExperiments());
+  };
+  const onRecordRetest = async (exp: ExperimentRecord) => {
+    const v = summary[exp.metric].mean;
+    if (v === null) return;
+    await recordRetest(exp.id, v, savedId);
+    setExperiments(await listExperiments());
+  };
   useEffect(() => {
     setFrameIndex(0);
     setEventLoop(null);
@@ -98,6 +139,7 @@ export function App() {
       track.video.fileName.replace(/\.[^.]+$/, ''),
       track,
       (segmentation?.shots ?? []).map((shot, i) => ({ shot, metrics: shotMetrics[i]! })),
+      (report?.evaluations ?? []).filter((e) => e.triggered).map((e) => ({ ruleId: e.ruleId, metric: e.metric, values: e.values })),
     );
     setSavedId(rec.id);
     refreshSessions();
@@ -146,7 +188,7 @@ export function App() {
     <div className="app">
       <header className="top">
         <h1>MOTION LAB</h1>
-        <span className="sub">Form Shooting · 步驟 1–5：逐幀姿態擷取 → 時間序列 → 階段切分 → 指標 → 動態骨架播放器</span>
+        <span className="sub">Form Shooting · 步驟 1–6：逐幀姿態擷取 → 時間序列 → 階段切分 → 指標 → 播放器 → 規則引擎與報告</span>
       </header>
 
       <section className="panel">
@@ -280,10 +322,28 @@ export function App() {
             </section>
           )}
 
+          {(report || reportError) && (
+            <section className="panel">
+              <h2>6. 報告（重點整理 · 建議 · 無法判讀 · 不打總分）</h2>
+              {reportError && <p className="error">規則檔或報告產生錯誤：{reportError}</p>}
+              {report && (
+                <ReportPanel
+                  report={report}
+                  sessionName={sessionName}
+                  onShowEvent={(i) => setEventLoop({ center: i })}
+                  onStartExperiment={onStartExperiment}
+                  openExperiments={experiments.filter((e) => !e.retest)}
+                  onRecordRetest={onRecordRetest}
+                  currentValueFor={(m) => summary[m].mean}
+                />
+              )}
+            </section>
+          )}
+
           {processed && (
             <section className="panel">
               <h2>
-                6. 診斷：原始 vs 平滑（One Euro：minCutoff {thresholds.smoothing.minCutoffHz} Hz · β {thresholds.smoothing.beta}
+                7. 診斷：原始 vs 平滑（One Euro：minCutoff {thresholds.smoothing.minCutoffHz} Hz · β {thresholds.smoothing.beta}
                 ）· 點擊曲線跳到該幀
               </h2>
               <div className="meta" style={{ marginBottom: 8 }}>

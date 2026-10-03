@@ -55,24 +55,32 @@ const lerpPose = (a: Pose, b: Pose, u: number): Pose => ({
   kneeFlex: lerp(a.kneeFlex, b.kneeFlex, u),
 });
 
-function poseAt(tS: number, shots: ShotScript[]): Pose {
+export type PoseOverrides = Partial<Record<keyof typeof POSES, Partial<Pose>>>;
+
+function poseAt(tS: number, shots: ShotScript[], ov: PoseOverrides): Pose {
+  const P = {
+    setup: { ...POSES.setup, ...ov.setup },
+    dipBottom: { ...POSES.dipBottom, ...ov.dipBottom },
+    setPoint: { ...POSES.setPoint, ...ov.setPoint },
+    release: { ...POSES.release, ...ov.release },
+  };
   for (const s of shots) {
     let t0 = s.startS;
     if (tS < t0) break;
     const seg: Array<[number, Pose, Pose]> = [
-      [s.setupS, POSES.setup, POSES.setup],
-      [s.dipS, POSES.setup, POSES.dipBottom],
-      [s.riseS, POSES.dipBottom, POSES.setPoint],
-      [s.extendS, POSES.setPoint, POSES.release],
-      [s.holdS, POSES.release, POSES.release],
-      [s.recoverS, POSES.release, POSES.setup],
+      [s.setupS, P.setup, P.setup],
+      [s.dipS, P.setup, P.dipBottom],
+      [s.riseS, P.dipBottom, P.setPoint],
+      [s.extendS, P.setPoint, P.release],
+      [s.holdS, P.release, P.release],
+      [s.recoverS, P.release, P.setup],
     ];
     for (const [dur, a, b] of seg) {
       if (tS < t0 + dur) return lerpPose(a, b, (tS - t0) / dur);
       t0 += dur;
     }
   }
-  return POSES.setup;
+  return P.setup;
 }
 
 export function truthFor(s: ShotScript): ShotTruth {
@@ -83,7 +91,7 @@ export function truthFor(s: ShotScript): ShotTruth {
   return { dipStartS, dipBottomS, setPointS, releaseS, followThroughEndApproxS: releaseS + s.holdS };
 }
 
-export function buildSyntheticShotTrack(shots: ShotScript[], totalS: number, fps = 30, dropFrames: number[] = []): PoseTrack {
+export function buildSyntheticShotTrack(shots: ShotScript[], totalS: number, fps = 30, dropFrames: number[] = [], overrides: PoseOverrides = {}): PoseTrack {
   const W = 1000;
   const H = 1000;
   const n = Math.round(totalS * fps);
@@ -91,7 +99,7 @@ export function buildSyntheticShotTrack(shots: ShotScript[], totalS: number, fps
   const d2r = Math.PI / 180;
   for (let f = 0; f < n; f++) {
     const tS = f / fps;
-    const pose = poseAt(tS, shots);
+    const pose = poseAt(tS, shots, overrides);
     const lm = Array.from({ length: JOINT_COUNT }, () => ({ x: 0.5, y: 0.5, z: 0, visibility: 0.9 }));
     const set = (name: JointName, x: number, y: number, vis = 0.9) => {
       lm[JOINT_INDEX[name]] = { x: x / W, y: y / H, z: 0, visibility: vis };
