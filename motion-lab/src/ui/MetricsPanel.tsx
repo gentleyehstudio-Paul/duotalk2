@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { thresholds } from '../config/thresholds';
 import { formatMetric, METRIC_DEFINITIONS, UNIT_LABEL } from '../metrics/definitions';
 import { deviationFromBaseline } from '../metrics/summary';
@@ -15,7 +16,7 @@ interface Props {
  * 步驟 4 檢視：每球 × 七指標、Session 平均/標準差/CV、個人基準與偏離。
  * 不顯示任何總分或好壞判定；所有數字都可點擊回到對應的動態片段。
  */
-export function MetricsPanel({ shots, summary, baseline, onShowEvent }: Props) {
+export const MetricsPanel = memo(function MetricsPanel({ shots, summary, baseline, onShowEvent }: Props) {
   const N = thresholds.display.eventContextFrames;
   return (
     <div style={{ overflowX: 'auto' }}>
@@ -45,7 +46,7 @@ export function MetricsPanel({ shots, summary, baseline, onShowEvent }: Props) {
       </p>
     </div>
   );
-}
+});
 
 function MetricRow({ id, shots, summary, baseline, onShowEvent }: Props & { id: MetricId }) {
   const def = METRIC_DEFINITIONS[id];

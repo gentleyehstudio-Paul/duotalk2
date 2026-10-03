@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import { thresholds } from '../config/thresholds';
 import type { ProcessedTrack } from '../types/series';
 import { PHASE_NAMES, type PhaseName, type SegmentationFailure, type SegmentationResult, type Shot, type ShotIssue } from '../types/shot';
@@ -48,24 +48,12 @@ interface Props {
 /**
  * 步驟 3 檢視：時間軸上標示每球的六個階段，點擊跳幀；
  * Release 等關鍵時刻一律以 ±N 幀循環片段呈現（規則 1），不提供靜態單幀「結論」。
+ * ±N 循環本身由播放器（usePlayback）執行，這裡只負責設定 loop。
  */
 export function ShotTimeline({ processed, result, frameIndex, onSeek, loop, setLoop }: Props) {
   const n = processed.frames.length;
   const barRef = useRef<HTMLDivElement>(null);
   const N = thresholds.display.eventContextFrames;
-
-  // ±N 幀循環播放
-  useEffect(() => {
-    if (!loop) return;
-    let i = Math.max(0, loop.center - N);
-    const hi = Math.min(n - 1, loop.center + N);
-    onSeek(i);
-    const id = setInterval(() => {
-      i = i >= hi ? Math.max(0, loop.center - N) : i + 1;
-      onSeek(i);
-    }, thresholds.display.eventClipFrameIntervalMs);
-    return () => clearInterval(id);
-  }, [loop, N, n, onSeek]);
 
   const pct = (i: number) => `${(i / Math.max(1, n - 1)) * 100}%`;
   const onBarClick = (e: React.MouseEvent<HTMLDivElement>) => {

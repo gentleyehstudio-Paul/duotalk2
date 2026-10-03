@@ -49,6 +49,14 @@ table.quality th { color: var(--muted); font-weight: 600; }
 table.metrics td, table.metrics th { vertical-align: top; white-space: nowrap; }
 table.metrics td:first-child { white-space: normal; min-width: 120px; }
 button.link { background: none; color: var(--text); border: 0; padding: 0; text-decoration: underline dotted; font-weight: 500; }
+.controls { margin-top: 6px; }
+.controls .seg { display: inline-flex; gap: 4px; }
+.controls .seg button { padding: 6px 10px; }
+.angle-curves > div { position: relative; }
+.recharts-wrapper:focus, .recharts-wrapper:focus-visible, .recharts-surface:focus { outline: none; }
+.cursor-overlay { position: absolute; width: 0; border-left: 2px dashed var(--text); opacity: 0.85; pointer-events: none; }
+.chart-box { position: relative; width: 100%; }
+.curve-label { position: absolute; top: 2px; left: 52px; font-size: 11px; color: var(--muted); pointer-events: none; }
 .viewer { position: relative; width: 100%; background: #000; border-radius: 8px; overflow: hidden; }
 .viewer canvas { display: block; width: 100%; height: auto; }
 .scrub { width: 100%; }

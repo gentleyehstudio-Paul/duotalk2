@@ -96,6 +96,16 @@
 Set Point = Release 前最後一次肘屈曲局部極大 → Release；Release = 上升速度峰值後手腕停止上升的那一幀；
 Follow-through = Release → 手腕下降或手臂收回。
 
+## 步驟 5：動態骨架播放器
+
+| 參數 | 檔案位置 | 預設值 | 用途 |
+| --- | --- | --- | --- |
+| `display.playbackRates` | `src/config/thresholds.ts` | `[0.25, 0.5, 1]` | 播放器可選速度倍率 |
+| `display.defaultPlaybackRate` | `src/config/thresholds.ts` | `0.5` | 預設播放倍率 |
+| `display.trailFrames` | `src/config/thresholds.ts` | `24` | 關節軌跡尾跡顯示最近幾幀 |
+| `display.trailJoints` | `src/config/thresholds.ts` | `['wrist','elbow','hip']` | 畫軌跡的投籃側關節 |
+| `display.playbackCursorMinIntervalMs` | `src/config/thresholds.ts` | `80` | 播放時 React 介面（幀號、游標）最短更新間隔；Canvas 骨架仍每幀更新 |
+
 ## 步驟 4：指標與個人基準
 
 | 參數 | 檔案位置 | 預設值 | 用途 |

@@ -8,11 +8,11 @@ import { computeBaseline, summarizeSession } from '../metrics/summary';
 import { listAllShots } from '../storage/db';
 import type { Baseline } from '../types/metrics';
 import { MetricsPanel } from './MetricsPanel';
-import { ShotTimeline, type EventLoop } from './ShotTimeline';
+import type { EventLoop } from './ShotTimeline';
 import { deleteSession, getSession, listSessions, saveSession } from '../storage/db';
 import type { JointQuality, PoseTrack } from '../types/pose';
 import { loadVideoFile, type LoadedVideo } from '../video/loadVideo';
-import { FramePreview } from './FramePreview';
+import { Player } from './player/Player';
 import { SeriesPanel } from './SeriesPanel';
 
 type SessionSummary = Awaited<ReturnType<typeof listSessions>>[number];
@@ -146,7 +146,7 @@ export function App() {
     <div className="app">
       <header className="top">
         <h1>MOTION LAB</h1>
-        <span className="sub">Form Shooting · 步驟 1–4：逐幀姿態擷取 → 時間序列 → 階段切分 → 指標</span>
+        <span className="sub">Form Shooting · 步驟 1–5：逐幀姿態擷取 → 時間序列 → 階段切分 → 指標 → 動態骨架播放器</span>
       </header>
 
       <section className="panel">
@@ -249,25 +249,24 @@ export function App() {
             </div>
           </section>
 
-          <section className="panel">
-            <h2>4. 逐幀核對（拖曳或 ←/→ 逐幀；用來驗證骨架與畫面是否對齊）</h2>
-            {loaded ? (
-              <FramePreview video={loaded.element} track={track} index={frameIndex} onIndexChange={setFrameIndex} />
-            ) : (
-              <p className="note">這是從 IndexedDB 載入的 Session，沒有原始影片可疊圖；重新選擇同一支影片即可對照。</p>
-            )}
-          </section>
-
-          {processed && segmentation && (
+          {processed && (
             <section className="panel">
               <h2>
-                5. 投籃與階段切分（{segmentation.shots.length} 球 · 身高尺度 {Number.isNaN(processed.bodyHeightPx) ? '無法估計' : `${processed.bodyHeightPx.toFixed(0)} px / ${processed.bodyHeightSource}`}）
+                4. 動態骨架播放器（空白鍵播放/暫停 · ←/→ 逐幀 · 慢放 · 軌跡 · 階段時間軸 · 角度曲線點擊跳幀）
+                {segmentation && (
+                  <span className="note" style={{ marginLeft: 10 }}>
+                    {segmentation.shots.length} 球 · 身高尺度{' '}
+                    {Number.isNaN(processed.bodyHeightPx) ? '無法估計' : `${processed.bodyHeightPx.toFixed(0)} px / ${processed.bodyHeightSource}`}
+                  </span>
+                )}
               </h2>
-              <ShotTimeline
+              {!loaded && <p className="note">沒有原始影片（JSON 匯入或 IndexedDB 載入），播放器只顯示骨架；重新選擇同一支影片即可疊圖。</p>}
+              <Player
                 processed={processed}
-                result={segmentation}
+                segmentation={segmentation}
+                video={loaded?.element ?? null}
                 frameIndex={frameIndex}
-                onSeek={setFrameIndex}
+                setFrameIndex={setFrameIndex}
                 loop={eventLoop}
                 setLoop={setEventLoop}
               />
@@ -276,7 +275,7 @@ export function App() {
 
           {segmentation && segmentation.shots.length > 0 && (
             <section className="panel">
-              <h2>6. 指標（每球 × 7 項 · 不打總分）</h2>
+              <h2>5. 指標（每球 × 7 項 · 不打總分）</h2>
               <MetricsPanel shots={shotMetrics} summary={summary} baseline={baseline} onShowEvent={(i) => setEventLoop({ center: i })} />
             </section>
           )}
@@ -284,7 +283,7 @@ export function App() {
           {processed && (
             <section className="panel">
               <h2>
-                7. 時間序列與平滑（One Euro：minCutoff {thresholds.smoothing.minCutoffHz} Hz · β {thresholds.smoothing.beta}
+                6. 診斷：原始 vs 平滑（One Euro：minCutoff {thresholds.smoothing.minCutoffHz} Hz · β {thresholds.smoothing.beta}
                 ）· 點擊曲線跳到該幀
               </h2>
               <div className="meta" style={{ marginBottom: 8 }}>

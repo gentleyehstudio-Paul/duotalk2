@@ -183,6 +183,16 @@ export const thresholds = {
     eventContextFrames: 8,
     /** 關鍵時刻片段循環播放的每幀停留毫秒數。 */
     eventClipFrameIntervalMs: 120,
+    /** 步驟 5：播放器可選的播放速度倍率。 */
+    playbackRates: [0.25, 0.5, 1] as readonly number[],
+    /** 步驟 5：預設播放速度倍率。 */
+    defaultPlaybackRate: 0.5,
+    /** 步驟 5：關節軌跡尾跡顯示最近幾幀的路徑。 */
+    trailFrames: 24,
+    /** 步驟 5：要畫軌跡的關節（投籃側），對應 wrist / elbow / hip。 */
+    trailJoints: ['wrist', 'elbow', 'hip'] as readonly ('wrist' | 'elbow' | 'hip')[],
+    /** 步驟 5：播放時 React 介面（幀號、游標）最短更新間隔（毫秒）；Canvas 骨架仍每個呈現幀更新。 */
+    playbackCursorMinIntervalMs: 80,
   },
 
   /** 骨架資料品質門檻。 */

@@ -17,7 +17,7 @@
 | 2 | 時間序列與平滑（One Euro Filter、缺值、像素座標、速度/加速度、角度序列、投籃側/面向） | ✅ 完成 |
 | 3 | 投籃與階段切分（Release 事件偵測、六階段、單球/多球、無法判讀原因） | ✅ 完成 |
 | 4 | 指標計算（7 項首批指標、Session 彙總、CV、個人基準與偏離） | ✅ 完成 |
-| 5 | 動態骨架播放器 | ⏳ |
+| 5 | 動態骨架播放器（逐幀同步、慢放、軌跡、階段時間軸、角度曲線連動） | ✅ 完成 |
 | 6 | 規則引擎與報告 | ⏳ |
 | 7 | Session 比較 | ⏳ |
 
@@ -67,6 +67,11 @@ src/metrics/definitions.ts 七個指標的名稱、單位、來源與說明
 src/metrics/computeShotMetrics.ts 每球指標計算（缺值 → null + 原因）
 src/metrics/summary.ts     Session 彙總（平均/SD/CV）、個人基準、偏離
 src/ui/MetricsPanel.tsx    指標表（每球、平均、一致性、基準、偏離；點數值播 ±N 幀）
+src/ui/player/Player.tsx   動態骨架播放器（Canvas 疊圖、控制列、階段時間軸、角度曲線）
+src/ui/player/usePlayback.ts 播放邏輯：影片 rVFC 逐幀同步 / 無影片以經過時間推進 / ±N 循環
+src/ui/player/drawSkeleton.ts 骨架與軌跡尾跡繪製、mediaTime → 幀索引
+src/ui/player/AngleCurves.tsx 膝/髖/肘/肩四張小圖，階段色帶 + Release 線，點擊跳幀
+src/ui/player/CursorOverlay.tsx 不重繪圖表的 DOM 時間游標
 src/ui/                    React UI（步驟 1：上傳、進度、品質摘要、逐幀核對）
 docs/PARAMETERS.md         可調參數清單（位置、預設值、用途）
 ```
